@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
+import QRCode from "qrcode";
 
 const prisma = new PrismaClient();
 
@@ -80,7 +81,7 @@ async function main() {
     create: { id: "seed-dept-hr", name: "Human Resources", status: "active" },
   });
 
-  await prisma.category.upsert({
+  const electronics = await prisma.category.upsert({
     where: { id: "seed-cat-electronics" },
     update: {},
     create: {
@@ -90,13 +91,13 @@ async function main() {
     },
   });
 
-  await prisma.category.upsert({
+  const furniture = await prisma.category.upsert({
     where: { id: "seed-cat-furniture" },
     update: {},
     create: { id: "seed-cat-furniture", name: "Furniture" },
   });
 
-  await prisma.category.upsert({
+  const vehicles = await prisma.category.upsert({
     where: { id: "seed-cat-vehicles" },
     update: {},
     create: {
@@ -143,11 +144,78 @@ async function main() {
     departmentId: sales.id,
   });
 
+  const sampleAssets = [
+    {
+      id: "seed-asset-1",
+      tag: "AF-0001",
+      name: "Dell Latitude 5440 Laptop",
+      categoryId: electronics.id,
+      departmentId: engineering.id,
+      location: "Engineering Floor 2",
+      serial: "DL5440-001",
+      condition: "Good",
+      acquisitionDate: new Date("2025-01-15"),
+      acquisitionCost: 1200,
+      isBookable: false,
+    },
+    {
+      id: "seed-asset-2",
+      tag: "AF-0002",
+      name: "HP EliteBook 840 Laptop",
+      categoryId: electronics.id,
+      departmentId: sales.id,
+      location: "Sales Floor 1",
+      serial: "HP840-002",
+      condition: "Good",
+      acquisitionDate: new Date("2025-02-10"),
+      acquisitionCost: 1100,
+      isBookable: false,
+    },
+    {
+      id: "seed-asset-3",
+      tag: "AF-0003",
+      name: "Executive Office Desk",
+      categoryId: furniture.id,
+      departmentId: engineering.id,
+      location: "Engineering Floor 2",
+      serial: null,
+      condition: "Fair",
+      acquisitionDate: new Date("2024-08-01"),
+      acquisitionCost: 350,
+      isBookable: false,
+    },
+    {
+      id: "seed-asset-4",
+      tag: "AF-0004",
+      name: "Toyota Innova (Company Vehicle)",
+      categoryId: vehicles.id,
+      departmentId: null,
+      location: "Main Parking Lot",
+      serial: "VIN-9988776655",
+      condition: "Good",
+      acquisitionDate: new Date("2023-11-20"),
+      acquisitionCost: 24000,
+      isBookable: true,
+    },
+  ];
+
+  for (const assetData of sampleAssets) {
+    await prisma.asset.upsert({
+      where: { id: assetData.id },
+      update: {},
+      create: {
+        ...assetData,
+        qrCodeUrl: await QRCode.toDataURL(assetData.tag),
+      },
+    });
+  }
+
   console.log("Seed complete. Test accounts (password for all non-admin: 'Password123'):");
   console.log({ admin: admin.email, adminPassword: "Admin@123" });
   console.log({ assetManager: "manager@assetflow.test" });
   console.log({ departmentHead: "depthead@assetflow.test" });
   console.log({ employees: ["priya@assetflow.test", "raj@assetflow.test"] });
+  console.log({ assets: sampleAssets.map((a) => a.tag) });
 }
 
 main()
