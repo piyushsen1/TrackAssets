@@ -21,9 +21,10 @@ npm-debug.log*
 coverage/
 *.tsbuildinfo
 .vscode/
-copilot.md
-copilot-instructions.md
-mock_designs.txt
 .claude
 CLAUDE.md
 Mockup design Asset.txt
+copilot.md
+copilot-instructions.md
+mock_designs.txt
+TESTING_WORKFLOW.md
