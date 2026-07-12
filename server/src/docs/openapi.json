@@ -1,0 +1,677 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "AssetFlow API",
+    "version": "0.1.0",
+    "description": "Enterprise Asset & Resource Management System API. All endpoints except /auth/signup and /auth/login require a bearer token; endpoints marked (Admin) also require the admin role."
+  },
+  "servers": [{ "url": "/api/v1" }],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": { "error": { "type": "string" } }
+      }
+    }
+  },
+  "security": [{ "bearerAuth": [] }],
+  "tags": [
+    { "name": "Auth" },
+    { "name": "Dashboard" },
+    { "name": "Organization" },
+    { "name": "Assets" },
+    { "name": "Allocation & Transfer" },
+    { "name": "Resource Booking" },
+    { "name": "Maintenance" },
+    { "name": "Audit" },
+    { "name": "Reports" },
+    { "name": "Notifications" }
+  ],
+  "paths": {
+    "/auth/signup": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Create a new employee-role account",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password", "name"],
+                "properties": {
+                  "email": { "type": "string" },
+                  "password": { "type": "string" },
+                  "name": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Authenticate and receive a bearer token",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/auth/forgot-password": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Trigger a password reset email",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email"],
+                "properties": { "email": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Invalidate the current session/token",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/dashboard/overview": {
+      "get": {
+        "tags": ["Dashboard"],
+        "summary": "Aggregated stat cards",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/dashboard/alerts": {
+      "get": {
+        "tags": ["Dashboard"],
+        "summary": "Overdue return alerts",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/dashboard/recent-activity": {
+      "get": {
+        "tags": ["Dashboard"],
+        "summary": "Recent activity feed",
+        "parameters": [
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 10 } }
+        ],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/org/departments": {
+      "get": {
+        "tags": ["Organization"],
+        "summary": "List departments",
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["Organization"],
+        "summary": "Create a department (Admin)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "head": { "type": "string" },
+                  "parentDeptId": { "type": "string" },
+                  "status": { "type": "string", "enum": ["active", "inactive"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/org/departments/{deptId}": {
+      "patch": {
+        "tags": ["Organization"],
+        "summary": "Update a department (Admin)",
+        "parameters": [{ "name": "deptId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "head": { "type": "string" },
+                  "parentDeptId": { "type": "string" },
+                  "status": { "type": "string", "enum": ["active", "inactive"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "OK" } }
+      },
+      "delete": {
+        "tags": ["Organization"],
+        "summary": "Delete a department (Admin); 409 if referenced by assets/employees",
+        "parameters": [{ "name": "deptId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "204": { "description": "Deleted" },
+          "409": { "description": "Conflict", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/org/categories": {
+      "get": {
+        "tags": ["Organization"],
+        "summary": "List categories",
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["Organization"],
+        "summary": "Create a category (Admin)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "properties": { "name": { "type": "string" } } }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/org/employees": {
+      "get": {
+        "tags": ["Organization"],
+        "summary": "List employees",
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["Organization"],
+        "summary": "Create an employee record (Admin); links a signed-up user to a department",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "email": { "type": "string" },
+                  "deptId": { "type": "string" },
+                  "title": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/org/employees/{id}/role": {
+      "patch": {
+        "tags": ["Organization"],
+        "summary": "Assign admin/employee role (Admin)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "role": { "type": "string", "enum": ["employee", "admin"] } }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/assets": {
+      "get": {
+        "tags": ["Assets"],
+        "summary": "Search/filter the asset directory",
+        "parameters": [
+          { "name": "search", "in": "query", "schema": { "type": "string" } },
+          { "name": "category", "in": "query", "schema": { "type": "string" } },
+          { "name": "status", "in": "query", "schema": { "type": "string" } },
+          { "name": "department", "in": "query", "schema": { "type": "string" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["Assets"],
+        "summary": "Register a new asset; server generates tag/QR, status initializes to Available",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "category": { "type": "string" },
+                  "department": { "type": "string" },
+                  "location": { "type": "string" },
+                  "serial": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/assets/{tag}": {
+      "get": {
+        "tags": ["Assets"],
+        "summary": "Full asset detail incl. current holder, allocation/maintenance history",
+        "parameters": [{ "name": "tag", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      },
+      "patch": {
+        "tags": ["Assets"],
+        "summary": "Update name/category/location (never status directly)",
+        "parameters": [{ "name": "tag", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "category": { "type": "string" },
+                  "location": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/assets/{tag}/history": {
+      "get": {
+        "tags": ["Assets"],
+        "summary": "Combined allocation/maintenance/audit event log for this asset",
+        "parameters": [{ "name": "tag", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/allocations/{tag}/current": {
+      "get": {
+        "tags": ["Allocation & Transfer"],
+        "summary": "Current holder of an asset, or null if unallocated",
+        "parameters": [{ "name": "tag", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/allocations": {
+      "post": {
+        "tags": ["Allocation & Transfer"],
+        "summary": "Direct allocation; only allowed if the asset is currently unallocated",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "tag": { "type": "string" },
+                  "employeeId": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Created" },
+          "409": {
+            "description": "already_allocated — double-allocation block",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          }
+        }
+      }
+    },
+    "/allocations/{tag}/history": {
+      "get": {
+        "tags": ["Allocation & Transfer"],
+        "summary": "Allocation history log for an asset",
+        "parameters": [{ "name": "tag", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/transfer-requests": {
+      "post": {
+        "tags": ["Allocation & Transfer"],
+        "summary": "Request reassignment of an already-allocated asset",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "tag": { "type": "string" },
+                  "fromEmployeeId": { "type": "string" },
+                  "toEmployeeId": { "type": "string" },
+                  "reason": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/transfer-requests/{requestId}/approve": {
+      "patch": {
+        "tags": ["Allocation & Transfer"],
+        "summary": "Approve a transfer request (Admin)",
+        "parameters": [{ "name": "requestId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/transfer-requests/{requestId}/reject": {
+      "patch": {
+        "tags": ["Allocation & Transfer"],
+        "summary": "Reject a transfer request (Admin)",
+        "parameters": [{ "name": "requestId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "properties": { "reason": { "type": "string" } } }
+            }
+          }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/resources": {
+      "get": {
+        "tags": ["Resource Booking"],
+        "summary": "List bookable resources",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/resources/{resourceId}/availability": {
+      "get": {
+        "tags": ["Resource Booking"],
+        "summary": "Time-slot map for a resource on a given date",
+        "parameters": [
+          { "name": "resourceId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "date", "in": "query", "required": true, "schema": { "type": "string", "format": "date" } }
+        ],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/bookings": {
+      "post": {
+        "tags": ["Resource Booking"],
+        "summary": "Book a time slot; 409 on overlap with an existing confirmed booking",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "resourceId": { "type": "string" },
+                  "date": { "type": "string", "format": "date" },
+                  "startTime": { "type": "string" },
+                  "endTime": { "type": "string" },
+                  "requesterId": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Created" },
+          "409": {
+            "description": "conflict — overlapping slot",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          }
+        }
+      }
+    },
+    "/bookings/{bookingId}": {
+      "delete": {
+        "tags": ["Resource Booking"],
+        "summary": "Cancel a booking (requester or Admin only)",
+        "parameters": [{ "name": "bookingId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "204": { "description": "Deleted" } }
+      }
+    },
+    "/maintenance/tickets": {
+      "get": {
+        "tags": ["Maintenance"],
+        "summary": "List tickets, filterable by Kanban status",
+        "parameters": [{ "name": "status", "in": "query", "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["Maintenance"],
+        "summary": "Raise a maintenance ticket",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "tag": { "type": "string" },
+                  "issueDescription": { "type": "string" },
+                  "raisedBy": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/maintenance/tickets/{ticketId}/approve": {
+      "patch": {
+        "tags": ["Maintenance"],
+        "summary": "Approve (Admin); sets linked asset status to Under Maintenance",
+        "parameters": [{ "name": "ticketId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/maintenance/tickets/{ticketId}/assign-technician": {
+      "patch": {
+        "tags": ["Maintenance"],
+        "summary": "Assign a technician",
+        "parameters": [{ "name": "ticketId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "properties": { "technicianName": { "type": "string" } } }
+            }
+          }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/maintenance/tickets/{ticketId}/start": {
+      "patch": {
+        "tags": ["Maintenance"],
+        "summary": "Move ticket to in_progress",
+        "parameters": [{ "name": "ticketId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/maintenance/tickets/{ticketId}/resolve": {
+      "patch": {
+        "tags": ["Maintenance"],
+        "summary": "Resolve; reverts linked asset status to Available",
+        "parameters": [{ "name": "ticketId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "properties": { "resolutionNotes": { "type": "string" } } }
+            }
+          }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/audits": {
+      "post": {
+        "tags": ["Audit"],
+        "summary": "Start an audit cycle (Admin); auto-populates line items from current assets",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "department": { "type": "string" },
+                  "dateRangeStart": { "type": "string", "format": "date" },
+                  "dateRangeEnd": { "type": "string", "format": "date" },
+                  "auditors": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/audits/{auditId}/line-items/{tag}": {
+      "patch": {
+        "tags": ["Audit"],
+        "summary": "Record a verification result for an asset in this audit",
+        "parameters": [
+          { "name": "auditId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "tag", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "verification": { "type": "string", "enum": ["verified", "missing", "damaged"] },
+                  "notes": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/audits/{auditId}/discrepancies": {
+      "get": {
+        "tags": ["Audit"],
+        "summary": "Auto-computed list of line items where verification ≠ verified",
+        "parameters": [{ "name": "auditId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/audits/{auditId}/close": {
+      "post": {
+        "tags": ["Audit"],
+        "summary": "Close the audit (Admin); auto-creates maintenance tickets/notifications for discrepancies",
+        "parameters": [{ "name": "auditId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/reports/utilization-by-department": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Bar chart data: utilization by department",
+        "parameters": [{ "name": "range", "in": "query", "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/reports/maintenance-frequency": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Line chart data: maintenance ticket frequency over time",
+        "parameters": [{ "name": "range", "in": "query", "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/reports/most-used-assets": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Most-used assets list",
+        "parameters": [{ "name": "limit", "in": "query", "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/reports/idle-assets": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Idle assets list",
+        "parameters": [{ "name": "idleDays", "in": "query", "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/reports/due-for-maintenance": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Assets nearing maintenance/retirement",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/reports/export": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Export a report as PDF or CSV",
+        "parameters": [
+          { "name": "format", "in": "query", "required": true, "schema": { "type": "string", "enum": ["pdf", "csv"] } }
+        ],
+        "responses": { "200": { "description": "File stream" } }
+      }
+    },
+    "/notifications": {
+      "get": {
+        "tags": ["Notifications"],
+        "summary": "Filterable, paginated activity/notification feed",
+        "parameters": [
+          { "name": "type", "in": "query", "schema": { "type": "string", "enum": ["all", "alerts", "approvals", "bookings"] } },
+          { "name": "page", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/notifications/{eventId}/read": {
+      "patch": {
+        "tags": ["Notifications"],
+        "summary": "Mark a notification as read",
+        "parameters": [{ "name": "eventId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    }
+  }
+}
