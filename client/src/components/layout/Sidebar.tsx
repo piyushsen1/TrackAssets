@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthProvider";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard" },
@@ -17,6 +18,8 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { signOut } = useAuth();
 
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-gray-200 bg-white">
@@ -39,6 +42,17 @@ export function Sidebar() {
           );
         })}
       </nav>
+      <div className="border-t border-gray-100 px-3 py-4">
+        <button
+          onClick={() => {
+            signOut();
+            router.push("/login");
+          }}
+          className="w-full rounded-md bg-transparent px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Sign out
+        </button>
+      </div>
     </aside>
   );
 }
