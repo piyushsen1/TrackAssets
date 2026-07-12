@@ -23,7 +23,7 @@ type ResourceOption = {
 type BookingItem = {
   bookingId: string;
   requesterId: string;
-  requesterName?: string;
+  requesterName?: string | null;
   date: string;
   startTime: string;
   endTime: string;
@@ -43,6 +43,13 @@ function formatDateLabel(value: string) {
   });
 }
 
+function formatTimeLabel(value: string) {
+  return new Date(value).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export default function BookingPage() {
   const { user } = useAuth();
   const [resources, setResources] = useState<ResourceOption[]>([]);
@@ -53,7 +60,11 @@ export default function BookingPage() {
   const [endTime, setEndTime] = useState("10:00");
   const [requesterId, setRequesterId] = useState("");
   const [availability, setAvailability] = useState<BookingItem[]>([]);
+  const [myBookings, setMyBookings] = useState<BookingItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [cancellingBookingId, setCancellingBookingId] = useState<string | null>(
+    null,
+  );
   const [message, setMessage] = useState<MessageState | null>(null);
 
   useEffect(() => {
@@ -131,28 +142,11 @@ export default function BookingPage() {
       return;
     }
 
-    const currentStart = new Date(`${date}T${startTime}`);
-    const currentEnd = new Date(`${date}T${endTime}`);
-    const conflict = availability.some((booking) => {
-      if (booking.status !== "confirmed") return false;
-      const bookingStart = new Date(booking.startTime);
-      const bookingEnd = new Date(booking.endTime);
-      return currentStart < bookingEnd && currentEnd > bookingStart;
-    });
-
-    if (conflict) {
-      setMessage({
-        tone: "error",
-        text: "That time slot overlaps an existing booking.",
-      });
-      return;
-    }
-
     setLoading(true);
     setMessage(null);
 
     try {
-      await api.post("/bookings", {
+      const created = await api.post<BookingItem>("/bookings", {
         resourceId,
         date,
         startTime,
@@ -160,6 +154,39 @@ export default function BookingPage() {
         requesterId,
       });
       setMessage({ tone: "success", text: "Booking created successfully." });
+      setMyBookings((current) => [created, ...current]);
+      const data = await api.get<BookingItem[]>(
+        `/resources/${resourceId}/availability?date=${date}`,
+      );
+      setAvailability(data || []);
+    } catch (err) {
+      const messageText =
+        err instanceof Error
+          ? err.message === "conflict"
+            ? "That time slot overlaps an existing booking."
+            : err.message
+          : "Booking could not be completed.";
+
+      setMessage({ tone: "error", text: messageText });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function cancelBooking(bookingId: string) {
+    setCancellingBookingId(bookingId);
+    setMessage(null);
+
+    try {
+      await api.delete(`/bookings/${bookingId}`);
+      setMyBookings((current) =>
+        current.map((booking) =>
+          booking.bookingId === bookingId
+            ? { ...booking, status: "cancelled" }
+            : booking,
+        ),
+      );
+      setMessage({ tone: "success", text: "Booking cancelled." });
       const data = await api.get<BookingItem[]>(
         `/resources/${resourceId}/availability?date=${date}`,
       );
@@ -167,13 +194,10 @@ export default function BookingPage() {
     } catch (err) {
       setMessage({
         tone: "error",
-        text:
-          err instanceof Error
-            ? err.message
-            : "Booking could not be completed.",
+        text: err instanceof Error ? err.message : "Unable to cancel booking.",
       });
     } finally {
-      setLoading(false);
+      setCancellingBookingId(null);
     }
   }
 
@@ -340,6 +364,73 @@ export default function BookingPage() {
                     </Badge>
                   </div>
                 ))
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--surface-card)] p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-[var(--text-primary)]">
+                  Your bookings
+                </h2>
+                <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                  Manage your current reservations and view recent activity.
+                </p>
+              </div>
+              <Badge tone="info">{myBookings.length}</Badge>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              {myBookings.length === 0 ? (
+                <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+                  No bookings yet. Create one from the form to see it here.
+                </div>
+              ) : (
+                myBookings.map((booking) => {
+                  const bookingResource = resources.find(
+                    (resource) => resource.resourceId === booking.resourceId,
+                  );
+
+                  return (
+                    <div
+                      key={booking.bookingId}
+                      className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3.5 py-3 text-sm"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="font-medium text-[var(--text-primary)]">
+                            {bookingResource?.name ?? "Resource"}
+                          </div>
+                          <div className="mt-1 text-[var(--text-secondary)]">
+                            {formatDateLabel(booking.date)} •{" "}
+                            {formatTimeLabel(booking.startTime)} –{" "}
+                            {formatTimeLabel(booking.endTime)}
+                          </div>
+                        </div>
+                        <Badge
+                          tone={
+                            booking.status === "cancelled" ? "warning" : "info"
+                          }
+                        >
+                          {booking.status}
+                        </Badge>
+                      </div>
+                      {booking.status !== "cancelled" && (
+                        <button
+                          type="button"
+                          onClick={() => cancelBooking(booking.bookingId)}
+                          disabled={cancellingBookingId === booking.bookingId}
+                          className="mt-3 inline-flex items-center rounded-lg border border-[var(--border-subtle)] px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)] transition hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-70"
+                        >
+                          {cancellingBookingId === booking.bookingId
+                            ? "Cancelling…"
+                            : "Cancel booking"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
