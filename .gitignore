@@ -21,6 +21,14 @@ npm-debug.log*
 coverage/
 *.tsbuildinfo
 .vscode/
+<<<<<<< HEAD
 copilot.md
 copilot-instructions.md
 mock_designs.txt
+=======
+.claude
+CLAUDE.md
+Mockup design Asset.txt
+copilot.md
+copilot-instructions.md
+>>>>>>> 87eceb21d86457019102e78121d730f2d757d71a
