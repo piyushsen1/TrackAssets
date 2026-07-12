@@ -2,12 +2,23 @@ import { Response } from "express";
 import { AuthedRequest } from "../middleware/auth";
 import { prisma } from "../config/db";
 
-export async function utilizationByDepartment(
-  _req: AuthedRequest,
-  res: Response,
-) {
+function parseRangeDays(range: string | undefined): number | null {
+  if (!range) return null;
+  const parsed = parseInt(range, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+export async function utilizationByDepartment(req: AuthedRequest, res: Response) {
+  const rangeDays = parseRangeDays(req.query.range as string | undefined);
+  const rangeStart = rangeDays ? new Date(Date.now() - rangeDays * 24 * 60 * 60 * 1000) : null;
+
   const assets = await prisma.asset.findMany({
-    include: { department: true, allocations: { where: { returnedAt: null } } },
+    include: {
+      department: true,
+      allocations: rangeStart
+        ? { where: { allocatedSince: { lte: new Date() }, OR: [{ returnedAt: null }, { returnedAt: { gte: rangeStart } }] } }
+        : { where: { returnedAt: null } },
+    },
   });
 
   const summary = assets.reduce((acc, asset) => {
@@ -26,14 +37,17 @@ export async function utilizationByDepartment(
   res.json(
     Array.from(summary.values()).map((row) => ({
       department: row.department,
-      utilization:
-        row.total === 0 ? 0 : Math.round((row.allocated / row.total) * 100),
+      utilization: row.total === 0 ? 0 : Math.round((row.allocated / row.total) * 100),
     })),
   );
 }
 
-export async function maintenanceFrequency(_req: AuthedRequest, res: Response) {
+export async function maintenanceFrequency(req: AuthedRequest, res: Response) {
+  const rangeDays = parseRangeDays(req.query.range as string | undefined);
+  const rangeStart = rangeDays ? new Date(Date.now() - rangeDays * 24 * 60 * 60 * 1000) : undefined;
+
   const tickets = await prisma.maintenanceTicket.findMany({
+    where: rangeStart ? { createdAt: { gte: rangeStart } } : undefined,
     orderBy: { createdAt: "asc" },
   });
   const frequency = tickets.reduce((acc, ticket) => {
@@ -48,18 +62,18 @@ export async function maintenanceFrequency(_req: AuthedRequest, res: Response) {
   res.json(Array.from(frequency.values()));
 }
 
-export async function mostUsedAssets(_req: AuthedRequest, res: Response) {
+export async function mostUsedAssets(req: AuthedRequest, res: Response) {
+  const limit = Math.min(100, Math.max(1, parseInt((req.query.limit as string) ?? "10", 10) || 10));
+
   const counts = await prisma.allocation.groupBy({
     by: ["assetId"],
     _count: { assetId: true },
     orderBy: { _count: { assetId: "desc" } },
-    take: 10,
+    take: limit,
   });
 
   const assetIds = counts.map((c) => c.assetId);
-  const assets = await prisma.asset.findMany({
-    where: { id: { in: assetIds } },
-  });
+  const assets = await prisma.asset.findMany({ where: { id: { in: assetIds } } });
   const assetMap = new Map(assets.map((asset) => [asset.id, asset]));
 
   res.json(
@@ -71,8 +85,9 @@ export async function mostUsedAssets(_req: AuthedRequest, res: Response) {
   );
 }
 
-export async function idleAssets(_req: AuthedRequest, res: Response) {
-  const threshold = new Date(Date.now() - 1000 * 60 * 60 * 24 * 90);
+export async function idleAssets(req: AuthedRequest, res: Response) {
+  const idleDays = Math.max(1, parseInt((req.query.idleDays as string) ?? "90", 10) || 90);
+  const threshold = new Date(Date.now() - idleDays * 24 * 60 * 60 * 1000);
   const assets = await prisma.asset.findMany({
     where: { status: "available", updatedAt: { lt: threshold } },
     include: { category: true, department: true },
@@ -90,41 +105,51 @@ export async function idleAssets(_req: AuthedRequest, res: Response) {
 }
 
 export async function dueForMaintenance(_req: AuthedRequest, res: Response) {
-  const threshold = new Date(Date.now() - 1000 * 60 * 60 * 24 * 180);
+  const allocatedThreshold = new Date(Date.now() - 1000 * 60 * 60 * 24 * 180);
+  const retirementThreshold = new Date();
+  retirementThreshold.setFullYear(retirementThreshold.getFullYear() - 3);
+
   const assets = await prisma.asset.findMany({
     where: {
+      status: { not: "under_maintenance" },
       OR: [
-        { status: "under_maintenance" },
-        { status: "allocated", updatedAt: { lt: threshold } },
+        { status: "allocated", updatedAt: { lt: allocatedThreshold } },
+        { acquisitionDate: { lt: retirementThreshold } },
       ],
     },
     include: { category: true, department: true },
   });
 
+  const now = Date.now();
   res.json(
-    assets.map((asset) => ({
-      tag: asset.tag,
-      name: asset.name,
-      status: asset.status,
-      department: asset.department?.name ?? null,
-      category: asset.category?.name ?? null,
-      updatedAt: asset.updatedAt,
-    })),
+    assets.map((asset) => {
+      const ageYears = asset.acquisitionDate
+        ? Math.floor((now - asset.acquisitionDate.getTime()) / (1000 * 60 * 60 * 24 * 365))
+        : null;
+      const nearingRetirement = ageYears !== null && ageYears >= 3;
+      return {
+        tag: asset.tag,
+        name: asset.name,
+        status: asset.status,
+        department: asset.department?.name ?? null,
+        category: asset.category?.name ?? null,
+        ageYears,
+        note: nearingRetirement
+          ? `Nearing retirement (${ageYears} years old)`
+          : "Long allocation without a recent maintenance check",
+      };
+    }),
   );
 }
 
 export async function exportReport(req: AuthedRequest, res: Response) {
   const { format } = req.query as { format?: string };
   if (!format) {
-    return res
-      .status(400)
-      .json({ error: "missing_fields", required: ["format"] });
+    return res.status(400).json({ error: "missing_fields", required: ["format"] });
   }
 
   if (format !== "csv") {
-    return res
-      .status(501)
-      .json({ error: "unsupported_format", supported: ["csv"] });
+    return res.status(501).json({ error: "unsupported_format", supported: ["csv"] });
   }
 
   const assets = await prisma.asset.findMany({

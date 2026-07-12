@@ -21,7 +21,7 @@ export function Modal({
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 px-4 py-8 sm:items-center">
       <div
         className="w-full max-w-md rounded-3xl border border-[var(--border-default)] bg-[var(--surface-card)] p-6 shadow-[0_24px_60px_rgba(21,145,220,0.2)]"
         role="dialog"

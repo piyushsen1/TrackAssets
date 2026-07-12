@@ -1,4 +1,5 @@
 import { Response } from "express";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../config/db";
 import { AuthedRequest } from "../middleware/auth";
 import type { VerificationResult } from "@prisma/client";
@@ -67,6 +68,68 @@ export async function startAudit(req: AuthedRequest, res: Response) {
     auditors: audit.auditors,
     status: audit.status,
     lineItems: assets.map((asset) => ({ tag: asset.tag, expectedLocation: asset.location ?? "Unknown" })),
+  });
+}
+
+export async function listAudits(req: AuthedRequest, res: Response) {
+  const { status, department } = req.query as { status?: string; department?: string };
+
+  const audits = await prisma.auditCycle.findMany({
+    where: {
+      ...(status && { status: status as Prisma.AuditCycleWhereInput["status"] }),
+      ...(department && { departmentId: department }),
+    },
+    include: { department: true, lineItems: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  res.json(
+    audits.map((audit) => {
+      const discrepancyCount = audit.lineItems.filter(
+        (item) => item.result === "missing" || item.result === "damaged"
+      ).length;
+      const verifiedCount = audit.lineItems.filter((item) => item.result === "verified").length;
+      return {
+        auditId: audit.id,
+        departmentId: audit.departmentId,
+        department: audit.department.name,
+        dateRangeStart: audit.dateRangeStart,
+        dateRangeEnd: audit.dateRangeEnd,
+        auditors: audit.auditors,
+        status: audit.status,
+        totalLineItems: audit.lineItems.length,
+        verifiedCount,
+        discrepancyCount,
+      };
+    })
+  );
+}
+
+export async function getAuditDetail(req: AuthedRequest, res: Response) {
+  const { auditId } = req.params;
+
+  const audit = await prisma.auditCycle.findUnique({
+    where: { id: auditId },
+    include: { department: true, lineItems: { include: { asset: true } } },
+  });
+  if (!audit) {
+    return res.status(404).json({ error: "audit_not_found" });
+  }
+
+  res.json({
+    auditId: audit.id,
+    departmentId: audit.departmentId,
+    department: audit.department.name,
+    dateRangeStart: audit.dateRangeStart,
+    dateRangeEnd: audit.dateRangeEnd,
+    auditors: audit.auditors,
+    status: audit.status,
+    lineItems: audit.lineItems.map((item) => ({
+      tag: item.asset.tag,
+      expectedLocation: item.expectedLocation,
+      result: item.result,
+      notes: item.notes,
+    })),
   });
 }
 

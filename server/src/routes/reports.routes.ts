@@ -1,7 +1,9 @@
 import { Router } from "express";
 import * as reportsController from "../controllers/reports.controller";
+import { requireAdmin } from "../middleware/requireRole";
 
 const router = Router();
+router.use(requireAdmin);
 
 router.get("/utilization-by-department", reportsController.utilizationByDepartment);
 router.get("/maintenance-frequency", reportsController.maintenanceFrequency);

@@ -11,6 +11,8 @@ import {
   BuildingIcon,
   TagIcon,
   UsersIcon,
+  PencilIcon,
+  TrashIcon,
 } from "@/components/ui/icons";
 
 type Department = {
@@ -78,8 +80,10 @@ export default function OrganizationPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -115,22 +119,36 @@ export default function OrganizationPage() {
     (e) => !q || e.name.toLowerCase().includes(q) || e.email.toLowerCase().includes(q),
   );
 
-  async function handleAddSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleFormSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setFormError(null);
+    setError(null);
     setSaving(true);
     const form = new FormData(e.currentTarget);
+    const wasEdit = !!editId;
+    const kind = tab === "departments" ? "Department" : tab === "categories" ? "Category" : "Employee";
 
     try {
       if (tab === "departments") {
-        await api.post("/org/departments", {
+        const payload = {
           name: form.get("name"),
           headEmployeeId: form.get("headEmployeeId") || null,
           parentDeptId: form.get("parentDeptId") || null,
           status: form.get("status") || "active",
-        });
+        };
+        if (editId) await api.patch(`/org/departments/${editId}`, payload);
+        else await api.post("/org/departments", payload);
       } else if (tab === "categories") {
-        await api.post("/org/categories", { name: form.get("name") });
+        const payload = { name: form.get("name") };
+        if (editId) await api.patch(`/org/categories/${editId}`, payload);
+        else await api.post("/org/categories", payload);
+      } else if (editId) {
+        await api.patch(`/org/employees/${editId}`, {
+          name: form.get("name"),
+          title: form.get("title") || null,
+          deptId: form.get("deptId") || null,
+          status: form.get("status") || "active",
+        });
       } else {
         await api.post("/org/employees", {
           name: form.get("name"),
@@ -140,6 +158,8 @@ export default function OrganizationPage() {
         });
       }
       setModalOpen(false);
+      setEditId(null);
+      setNotice(`${kind} ${wasEdit ? "updated" : "added"}.`);
       load();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : String(err));
@@ -149,8 +169,34 @@ export default function OrganizationPage() {
   }
 
   async function handleRoleChange(employeeId: string, role: Role) {
+    setError(null);
     try {
       await api.patch(`/org/employees/${employeeId}/role`, { role });
+      setNotice("Role updated.");
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  function openEdit(id: string) {
+    setFormError(null);
+    setEditId(id);
+    setModalOpen(true);
+  }
+
+  function openAdd() {
+    setFormError(null);
+    setEditId(null);
+    setModalOpen(true);
+  }
+
+  async function handleDelete(type: "departments" | "categories", id: string, label: string) {
+    if (!window.confirm(`Delete "${label}"? This can't be undone.`)) return;
+    setError(null);
+    try {
+      await api.delete(`/org/${type}/${id}`);
+      setNotice(`"${label}" deleted.`);
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -189,10 +235,7 @@ export default function OrganizationPage() {
           </p>
         </div>
         <button
-          onClick={() => {
-            setFormError(null);
-            setModalOpen(true);
-          }}
+          onClick={openAdd}
           className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-[var(--text-on-primary)] transition hover:bg-[var(--primary-hover)]"
         >
           <PlusIcon className="h-4 w-4" />
@@ -232,20 +275,26 @@ export default function OrganizationPage() {
           {error}
         </div>
       )}
+      {notice && (
+        <div className="mt-4 rounded-2xl border border-[var(--success-bg)] bg-[var(--success-bg)] px-4 py-3 text-sm text-[var(--success-fg)]">
+          {notice}
+        </div>
+      )}
 
       <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-card)]">
         {loading ? (
           <div className="py-14 text-center text-sm text-[var(--text-tertiary)]">Loading…</div>
         ) : (
-          <>
+          <div className="max-h-[480px] overflow-auto">
             {tab === "departments" && (
               <table className="w-full text-left text-sm">
-                <thead className="bg-[var(--surface-sunken)] text-xs uppercase tracking-wide text-[var(--text-tertiary)]">
+                <thead className="sticky top-0 z-10 bg-[var(--surface-sunken)] text-xs uppercase tracking-wide text-[var(--text-tertiary)]">
                   <tr>
                     <th className="px-5 py-3 font-semibold">Department</th>
                     <th className="px-5 py-3 font-semibold">Head</th>
                     <th className="px-5 py-3 font-semibold">Parent department</th>
                     <th className="px-5 py-3 font-semibold">Status</th>
+                    <th className="px-5 py-3 font-semibold text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-subtle)]">
@@ -263,11 +312,29 @@ export default function OrganizationPage() {
                           {d.status}
                         </Badge>
                       </td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            onClick={() => openEdit(d.deptId)}
+                            aria-label="Edit department"
+                            className="rounded-lg p-1.5 text-[var(--text-tertiary)] hover:bg-[var(--surface-card)] hover:text-[var(--primary)]"
+                          >
+                            <PencilIcon className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete("departments", d.deptId, d.name)}
+                            aria-label="Delete department"
+                            className="rounded-lg p-1.5 text-[var(--text-tertiary)] hover:bg-[var(--surface-card)] hover:text-[var(--danger-fg)]"
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                   {filteredDepartments.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="px-5 py-10 text-center text-[var(--text-tertiary)]">
+                      <td colSpan={5} className="px-5 py-10 text-center text-[var(--text-tertiary)]">
                         No departments found.
                       </td>
                     </tr>
@@ -278,20 +345,39 @@ export default function OrganizationPage() {
 
             {tab === "categories" && (
               <table className="w-full text-left text-sm">
-                <thead className="bg-[var(--surface-sunken)] text-xs uppercase tracking-wide text-[var(--text-tertiary)]">
+                <thead className="sticky top-0 z-10 bg-[var(--surface-sunken)] text-xs uppercase tracking-wide text-[var(--text-tertiary)]">
                   <tr>
                     <th className="px-5 py-3 font-semibold">Category</th>
+                    <th className="px-5 py-3 font-semibold text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-subtle)]">
                   {filteredCategories.map((c) => (
                     <tr key={c.categoryId} className="hover:bg-[var(--surface-sunken)]">
                       <td className="px-5 py-3.5 font-medium text-[var(--text-primary)]">{c.name}</td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            onClick={() => openEdit(c.categoryId)}
+                            aria-label="Edit category"
+                            className="rounded-lg p-1.5 text-[var(--text-tertiary)] hover:bg-[var(--surface-card)] hover:text-[var(--primary)]"
+                          >
+                            <PencilIcon className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete("categories", c.categoryId, c.name)}
+                            aria-label="Delete category"
+                            className="rounded-lg p-1.5 text-[var(--text-tertiary)] hover:bg-[var(--surface-card)] hover:text-[var(--danger-fg)]"
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                   {filteredCategories.length === 0 && (
                     <tr>
-                      <td className="px-5 py-10 text-center text-[var(--text-tertiary)]">
+                      <td colSpan={2} className="px-5 py-10 text-center text-[var(--text-tertiary)]">
                         No categories found.
                       </td>
                     </tr>
@@ -302,12 +388,14 @@ export default function OrganizationPage() {
 
             {tab === "employees" && (
               <table className="w-full text-left text-sm">
-                <thead className="bg-[var(--surface-sunken)] text-xs uppercase tracking-wide text-[var(--text-tertiary)]">
+                <thead className="sticky top-0 z-10 bg-[var(--surface-sunken)] text-xs uppercase tracking-wide text-[var(--text-tertiary)]">
                   <tr>
                     <th className="px-5 py-3 font-semibold">Name</th>
                     <th className="px-5 py-3 font-semibold">Department</th>
                     <th className="px-5 py-3 font-semibold">Title</th>
                     <th className="px-5 py-3 font-semibold">Role</th>
+                    <th className="px-5 py-3 font-semibold">Status</th>
+                    <th className="px-5 py-3 font-semibold text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-subtle)]">
@@ -345,11 +433,25 @@ export default function OrganizationPage() {
                           <Badge tone="neutral">no account</Badge>
                         )}
                       </td>
+                      <td className="px-5 py-3.5">
+                        <Badge tone={e.status === "active" ? "success" : "neutral"}>{e.status}</Badge>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex justify-end">
+                          <button
+                            onClick={() => openEdit(e.id)}
+                            aria-label="Edit employee"
+                            className="rounded-lg p-1.5 text-[var(--text-tertiary)] hover:bg-[var(--surface-card)] hover:text-[var(--primary)]"
+                          >
+                            <PencilIcon className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                   {filteredEmployees.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="px-5 py-10 text-center text-[var(--text-tertiary)]">
+                      <td colSpan={6} className="px-5 py-10 text-center text-[var(--text-tertiary)]">
                         No employees found.
                       </td>
                     </tr>
@@ -357,82 +459,126 @@ export default function OrganizationPage() {
                 </tbody>
               </table>
             )}
-          </>
+          </div>
         )}
       </div>
 
       {modalOpen && (
-        <Modal title={addLabel} onClose={() => setModalOpen(false)}>
-          <form onSubmit={handleAddSubmit} className="space-y-4">
+        <Modal
+          title={editId ? addLabel.replace("Add", "Edit") : addLabel}
+          onClose={() => {
+            setModalOpen(false);
+            setEditId(null);
+          }}
+        >
+          <form onSubmit={handleFormSubmit} className="space-y-4">
             {formError && (
               <div className="rounded-xl border border-[var(--danger-bg)] bg-[var(--danger-bg)] px-3.5 py-2.5 text-sm text-[var(--danger-fg)]">
                 {formError}
               </div>
             )}
 
-            {tab === "departments" && (
-              <>
-                <Field label="Name">
-                  <input name="name" required className={inputClass} />
-                </Field>
-                <Field label="Head (optional)">
-                  <select name="headEmployeeId" defaultValue="" className={inputClass}>
-                    <option value="">— None —</option>
-                    {employees.map((e) => (
-                      <option key={e.id} value={e.id}>
-                        {e.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Parent department (optional)">
-                  <select name="parentDeptId" defaultValue="" className={inputClass}>
-                    <option value="">— None —</option>
-                    {departments.map((d) => (
-                      <option key={d.deptId} value={d.deptId}>
-                        {d.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Status">
-                  <select name="status" defaultValue="active" className={inputClass}>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                </Field>
-              </>
-            )}
+            {tab === "departments" &&
+              (() => {
+                const editing = editId ? departments.find((d) => d.deptId === editId) : null;
+                return (
+                  <>
+                    <Field label="Name">
+                      <input name="name" required defaultValue={editing?.name ?? ""} className={inputClass} />
+                    </Field>
+                    <Field label="Head (optional)">
+                      <select
+                        name="headEmployeeId"
+                        defaultValue={editing?.headEmployeeId ?? ""}
+                        className={inputClass}
+                      >
+                        <option value="">— None —</option>
+                        {employees.map((e) => (
+                          <option key={e.id} value={e.id}>
+                            {e.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Parent department (optional)">
+                      <select
+                        name="parentDeptId"
+                        defaultValue={editing?.parentDeptId ?? ""}
+                        className={inputClass}
+                      >
+                        <option value="">— None —</option>
+                        {departments
+                          .filter((d) => d.deptId !== editId)
+                          .map((d) => (
+                            <option key={d.deptId} value={d.deptId}>
+                              {d.name}
+                            </option>
+                          ))}
+                      </select>
+                    </Field>
+                    <Field label="Status">
+                      <select name="status" defaultValue={editing?.status ?? "active"} className={inputClass}>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                    </Field>
+                  </>
+                );
+              })()}
 
-            {tab === "categories" && (
-              <Field label="Name">
-                <input name="name" required className={inputClass} />
-              </Field>
-            )}
+            {tab === "categories" &&
+              (() => {
+                const editing = editId ? categories.find((c) => c.categoryId === editId) : null;
+                return (
+                  <Field label="Name">
+                    <input name="name" required defaultValue={editing?.name ?? ""} className={inputClass} />
+                  </Field>
+                );
+              })()}
 
-            {tab === "employees" && (
-              <>
-                <Field label="Name">
-                  <input name="name" required className={inputClass} />
-                </Field>
-                <Field label="Email">
-                  <input name="email" type="email" required className={inputClass} />
-                </Field>
-                <Field label="Department (optional)">
-                  <select name="deptId" defaultValue="" className={inputClass}>
-                    <option value="">— None —</option>
-                    {departments.map((d) => (
-                      <option key={d.deptId} value={d.deptId}>
-                        {d.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Title (optional)">
-                  <input name="title" className={inputClass} />
-                </Field>
-              </>
-            )}
+            {tab === "employees" &&
+              (() => {
+                const editing = editId ? employees.find((emp) => emp.id === editId) : null;
+                return (
+                  <>
+                    <Field label="Name">
+                      <input name="name" required defaultValue={editing?.name ?? ""} className={inputClass} />
+                    </Field>
+                    <Field label="Email">
+                      <input
+                        type="email"
+                        name={editId ? undefined : "email"}
+                        value={editId ? (editing?.email ?? "") : undefined}
+                        readOnly={!!editId}
+                        disabled={!!editId}
+                        required={!editId}
+                        className={`${inputClass} ${editId ? "cursor-not-allowed opacity-60" : ""}`}
+                      />
+                    </Field>
+                    <Field label="Department (optional)">
+                      <select name="deptId" defaultValue={editing?.departmentId ?? ""} className={inputClass}>
+                        <option value="">— None —</option>
+                        {departments.map((d) => (
+                          <option key={d.deptId} value={d.deptId}>
+                            {d.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Title (optional)">
+                      <input name="title" defaultValue={editing?.title ?? ""} className={inputClass} />
+                    </Field>
+                    {editId && (
+                      <Field label="Status">
+                        <select name="status" defaultValue={editing?.status ?? "active"} className={inputClass}>
+                          <option value="active">Active</option>
+                          <option value="inactive">Inactive</option>
+                        </select>
+                      </Field>
+                    )}
+                  </>
+                );
+              })()}
 
             <button
               type="submit"

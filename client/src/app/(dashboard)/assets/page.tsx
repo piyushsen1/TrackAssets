@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api } from "@/lib/api";
 import type { Asset, AssetStatus, Category, Department } from "@/types";
+import { BoxIcon, ClipboardListIcon } from "@/components/ui/icons";
 
 interface AssetListResponse {
   items: Asset[];
@@ -20,7 +21,15 @@ const statusOptions: Array<{ value: AssetStatus | ""; label: string }> = [
   { value: "disposed", label: "Disposed" },
 ];
 
+const TABS = [
+  { key: "inventory", label: "Inventory", icon: ClipboardListIcon },
+  { key: "register", label: "Register asset", icon: BoxIcon },
+] as const;
+
+type TabKey = (typeof TABS)[number]["key"];
+
 export default function AssetsPage() {
+  const [tab, setTab] = useState<TabKey>("inventory");
   const [assets, setAssets] = useState<Asset[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -118,6 +127,7 @@ export default function AssetsPage() {
         isBookable: false,
       });
       await loadData();
+      setTab("inventory");
     } catch (err) {
       setFormError(
         err instanceof Error ? err.message : "Unable to register asset.",
@@ -127,15 +137,30 @@ export default function AssetsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-[var(--text-primary)]">
-            Asset directory
-          </h1>
-          <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            Register new assets and search the current inventory.
-          </p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">
+          Asset directory
+        </h1>
+        <p className="mt-1 text-sm text-[var(--text-secondary)]">
+          Register new assets and search the current inventory.
+        </p>
+      </div>
+
+      <div className="inline-flex rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-card)] p-1">
+        {TABS.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition ${
+              tab === key
+                ? "bg-[var(--primary)] text-[var(--text-on-primary)]"
+                : "text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)]"
+            }`}
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+          </button>
+        ))}
       </div>
 
       {formError && (
@@ -149,7 +174,7 @@ export default function AssetsPage() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
+      {tab === "register" && (
         <form
           onSubmit={handleSubmit}
           className="rounded-3xl border border-[var(--border-default)] bg-[var(--surface-card)] p-5 shadow-sm"
@@ -157,7 +182,7 @@ export default function AssetsPage() {
           <h2 className="text-lg font-semibold text-[var(--text-primary)]">
             Register asset
           </h2>
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             <label className="block text-sm font-medium text-[var(--text-primary)]">
               Asset name
               <input
@@ -275,7 +300,20 @@ export default function AssetsPage() {
                 className="mt-2 w-full rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3 py-2 text-sm"
               />
             </label>
-            <label className="block text-sm font-medium text-[var(--text-primary)]">
+            <label className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)] md:col-span-2 xl:col-span-1">
+              <input
+                type="checkbox"
+                checked={form.isBookable}
+                onChange={(e) =>
+                  setForm((current) => ({
+                    ...current,
+                    isBookable: e.target.checked,
+                  }))
+                }
+              />
+              Bookable resource
+            </label>
+            <label className="block text-sm font-medium text-[var(--text-primary)] md:col-span-2 xl:col-span-3">
               Document URLs (one per line)
               <textarea
                 value={form.documentUrls}
@@ -289,28 +327,17 @@ export default function AssetsPage() {
                 className="mt-2 w-full rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3 py-2 text-sm"
               />
             </label>
-            <label className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
-              <input
-                type="checkbox"
-                checked={form.isBookable}
-                onChange={(e) =>
-                  setForm((current) => ({
-                    ...current,
-                    isBookable: e.target.checked,
-                  }))
-                }
-              />
-              Bookable resource
-            </label>
           </div>
           <button
             type="submit"
-            className="mt-5 inline-flex w-full items-center justify-center rounded-2xl bg-[var(--primary)] px-4 py-3 text-sm font-semibold text-[var(--text-on-primary)]"
+            className="mt-5 inline-flex w-full items-center justify-center rounded-2xl bg-[var(--primary)] px-4 py-3 text-sm font-semibold text-[var(--text-on-primary)] md:w-auto"
           >
             Register asset
           </button>
         </form>
+      )}
 
+      {tab === "inventory" && (
         <div className="rounded-3xl border border-[var(--border-default)] bg-[var(--surface-card)] p-5 shadow-sm">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
@@ -412,9 +439,9 @@ export default function AssetsPage() {
           )}
 
           {!loading && assets.length > 0 && (
-            <div className="mt-5 overflow-hidden rounded-2xl border border-[var(--border-subtle)]">
+            <div className="mt-5 max-h-[480px] overflow-auto rounded-2xl border border-[var(--border-subtle)]">
               <table className="min-w-full divide-y divide-[var(--border-subtle)] text-sm">
-                <thead className="bg-[var(--surface-sunken)] text-left text-[var(--text-secondary)]">
+                <thead className="sticky top-0 z-10 bg-[var(--surface-sunken)] text-left text-[var(--text-secondary)]">
                   <tr>
                     <th className="px-3 py-2 font-medium">Tag</th>
                     <th className="px-3 py-2 font-medium">Name</th>
@@ -444,7 +471,7 @@ export default function AssetsPage() {
             </div>
           )}
         </div>
-      </div>
+      )}
     </div>
   );
 }

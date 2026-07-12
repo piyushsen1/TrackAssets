@@ -11,6 +11,7 @@ router.post("/allocations", allocationsController.createAllocation);
 router.get("/allocations/:tag/history", allocationsController.getAllocationHistory);
 router.patch("/allocations/:allocationId/return", canProcessReturn, allocationsController.returnAllocation);
 
+router.get("/transfer-requests", allocationsController.listTransferRequests);
 router.post("/transfer-requests", allocationsController.createTransferRequest);
 router.patch(
   "/transfer-requests/:requestId/approve",

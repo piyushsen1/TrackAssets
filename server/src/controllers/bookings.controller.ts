@@ -1,5 +1,5 @@
 import { Response } from "express";
-import { Booking } from "@prisma/client";
+import { Booking, Prisma } from "@prisma/client";
 import { AuthedRequest } from "../middleware/auth";
 import { prisma } from "../config/db";
 
@@ -24,6 +24,83 @@ export async function createResource(req: AuthedRequest, res: Response) {
 
   const resource = await prisma.resource.create({ data: { name, type } });
   res.status(201).json({ resourceId: resource.id, name: resource.name, type: resource.type });
+}
+
+export async function updateResource(req: AuthedRequest, res: Response) {
+  const { resourceId } = req.params;
+  const { name, type } = req.body ?? {};
+
+  const existing = await prisma.resource.findUnique({ where: { id: resourceId } });
+  if (!existing) {
+    return res.status(404).json({ error: "resource_not_found" });
+  }
+
+  const resource = await prisma.resource.update({
+    where: { id: resourceId },
+    data: {
+      ...(name !== undefined && { name }),
+      ...(type !== undefined && { type }),
+    },
+  });
+
+  res.json({ resourceId: resource.id, name: resource.name, type: resource.type });
+}
+
+export async function deleteResource(req: AuthedRequest, res: Response) {
+  const { resourceId } = req.params;
+
+  const existing = await prisma.resource.findUnique({ where: { id: resourceId } });
+  if (!existing) {
+    return res.status(404).json({ error: "resource_not_found" });
+  }
+
+  // Booking.resourceId has no onDelete cascade, so any booking row at all — not just
+  // active ones — would make the delete itself fail with a raw FK violation. Count
+  // every booking (cancelled/past included) rather than just currently-active ones.
+  const bookingCount = await prisma.booking.count({ where: { resourceId } });
+  if (bookingCount > 0) {
+    return res.status(409).json({ error: "resource_has_bookings", bookingCount });
+  }
+
+  await prisma.resource.delete({ where: { id: resourceId } });
+  res.status(204).send();
+}
+
+export async function listBookings(req: AuthedRequest, res: Response) {
+  const { resourceId, requesterId, status, from, to } = req.query as Record<string, string>;
+
+  const where: Prisma.BookingWhereInput = {
+    ...(resourceId && { resourceId }),
+    ...(requesterId && { requesterId }),
+    ...(status && { status: status as Prisma.BookingWhereInput["status"] }),
+    ...((from || to) && {
+      date: {
+        ...(from && { gte: new Date(`${from}T00:00:00.000Z`) }),
+        ...(to && { lte: new Date(`${to}T23:59:59.999Z`) }),
+      },
+    }),
+  };
+
+  const bookings = await prisma.booking.findMany({
+    where,
+    include: { resource: true, requester: true },
+    orderBy: { startTime: "asc" },
+  });
+
+  res.json(
+    bookings.map((booking) => ({
+      bookingId: booking.id,
+      resourceId: booking.resourceId,
+      resourceName: booking.resource.name,
+      requesterId: booking.requesterId,
+      requesterName: booking.requester.name,
+      date: booking.date,
+      startTime: booking.startTime,
+      endTime: booking.endTime,
+      status: booking.status,
+      displayStatus: displayStatus(booking),
+    }))
+  );
 }
 
 export async function getResourceAvailability(req: AuthedRequest, res: Response) {

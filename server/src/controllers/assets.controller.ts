@@ -1,11 +1,21 @@
 import { Response } from "express";
 import QRCode from "qrcode";
-import { Prisma } from "@prisma/client";
+import { Prisma, AssetStatus } from "@prisma/client";
 import { prisma } from "../config/db";
 import { AuthedRequest } from "../middleware/auth";
 
 const TAG_PREFIX = "AF-";
 const TAG_PAD = 4;
+
+const VALID_ASSET_STATUSES: AssetStatus[] = [
+  "available",
+  "allocated",
+  "reserved",
+  "under_maintenance",
+  "lost",
+  "retired",
+  "disposed",
+];
 
 async function generateNextTag(): Promise<string> {
   const startPos = TAG_PREFIX.length + 1;
@@ -70,11 +80,15 @@ export async function listAssets(req: AuthedRequest, res: Response) {
     Math.max(1, parseInt((req.query.pageSize as string) ?? "20", 10) || 20),
   );
 
+  if (status && !VALID_ASSET_STATUSES.includes(status as AssetStatus)) {
+    return res.status(400).json({ error: "invalid_status", allowed: VALID_ASSET_STATUSES });
+  }
+
   const searchTerm = [search, tag, serial, qr].filter(Boolean).join(" ").trim();
 
   const where: Prisma.AssetWhereInput = {
     ...(category && { categoryId: category }),
-    ...(status && { status: status as Prisma.EnumAssetStatusFilter["equals"] }),
+    ...(status && { status: status as AssetStatus }),
     ...(department && { departmentId: department }),
     ...(location && { location: { contains: location, mode: "insensitive" } }),
     ...(searchTerm && {

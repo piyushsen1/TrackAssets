@@ -11,9 +11,12 @@ router.delete("/departments/:deptId", requireAdmin, orgController.deleteDepartme
 
 router.get("/categories", orgController.listCategories);
 router.post("/categories", requireAdmin, orgController.createCategory);
+router.patch("/categories/:categoryId", requireAdmin, orgController.updateCategory);
+router.delete("/categories/:categoryId", requireAdmin, orgController.deleteCategory);
 
 router.get("/employees", orgController.listEmployees);
 router.post("/employees", requireAdmin, orgController.createEmployee);
+router.patch("/employees/:id", requireAdmin, orgController.updateEmployee);
 router.patch("/employees/:id/role", requireAdmin, orgController.setEmployeeRole);
 
 export default router;

@@ -10,6 +10,7 @@ import {
   SearchIcon,
   UsersIcon,
   ClipboardListIcon,
+  WrenchIcon,
 } from "@/components/ui/icons";
 
 type TicketStatus =
@@ -53,6 +54,12 @@ const PRIORITY_TONE: Record<TicketPriority, BadgeTone> = {
   high: "danger",
 };
 
+const PRIORITY_ICON_CLASSES: Record<TicketPriority, string> = {
+  low: "bg-[var(--surface-sunken)] text-[var(--text-tertiary)]",
+  medium: "bg-[var(--info-bg)] text-[var(--info-fg)]",
+  high: "bg-[var(--danger-bg)] text-[var(--danger-fg)]",
+};
+
 type ActionModal =
   | { type: "reject"; ticket: Ticket }
   | { type: "assign"; ticket: Ticket }
@@ -75,7 +82,10 @@ export default function MaintenancePage() {
   const [assets, setAssets] = useState<AssetOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<TicketStatus | "all">("all");
+  const [view, setView] = useState<"board" | "table">("board");
 
   const [raiseOpen, setRaiseOpen] = useState(false);
   const [actionModal, setActionModal] = useState<ActionModal | null>(null);
@@ -111,6 +121,13 @@ export default function MaintenancePage() {
     filtered.forEach((t) => map.get(t.status)?.push(t));
     return map;
   }, [filtered]);
+  const tableTickets =
+    statusFilter === "all" ? filtered : filtered.filter((t) => t.status === statusFilter);
+  const columnByKey = useMemo(() => {
+    const map = new Map<TicketStatus, (typeof COLUMNS)[number]>();
+    COLUMNS.forEach((c) => map.set(c.key, c));
+    return map;
+  }, []);
 
   async function handleRaiseSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -118,13 +135,14 @@ export default function MaintenancePage() {
     setSaving(true);
     const form = new FormData(e.currentTarget);
     try {
-      await api.post("/maintenance/tickets", {
+      const created = await api.post<{ tag: string }>("/maintenance/tickets", {
         tag: form.get("tag"),
         issueDescription: form.get("issueDescription"),
         priority: form.get("priority") || "medium",
         raisedBy: form.get("raisedBy"),
       });
       setRaiseOpen(false);
+      setNotice(`Ticket raised for ${created.tag}.`);
       load();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : String(err));
@@ -134,8 +152,10 @@ export default function MaintenancePage() {
   }
 
   async function approve(ticket: Ticket) {
+    setError(null);
     try {
       await api.patch(`/maintenance/tickets/${ticket.ticketId}/approve`);
+      setNotice(`Ticket for ${ticket.tag} approved.`);
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -143,8 +163,10 @@ export default function MaintenancePage() {
   }
 
   async function start(ticket: Ticket) {
+    setError(null);
     try {
       await api.patch(`/maintenance/tickets/${ticket.ticketId}/start`);
+      setNotice(`Work started on ${ticket.tag}.`);
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -164,14 +186,17 @@ export default function MaintenancePage() {
         await api.patch(`/maintenance/tickets/${ticket.ticketId}/reject`, {
           reason: form.get("reason") || undefined,
         });
+        setNotice(`Ticket for ${ticket.tag} rejected.`);
       } else if (type === "assign") {
         await api.patch(`/maintenance/tickets/${ticket.ticketId}/assign-technician`, {
           technicianName: form.get("technicianName"),
         });
+        setNotice(`Technician assigned to ${ticket.tag}.`);
       } else {
         await api.patch(`/maintenance/tickets/${ticket.ticketId}/resolve`, {
           resolutionNotes: form.get("resolutionNotes") || undefined,
         });
+        setNotice(`Ticket for ${ticket.tag} resolved.`);
       }
       setActionModal(null);
       load();
@@ -191,16 +216,59 @@ export default function MaintenancePage() {
             Track tickets from request through repair to resolution.
           </p>
         </div>
+        <div className="flex items-center gap-3">
+          <div className="inline-flex rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-card)] p-1">
+            {(["board", "table"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`rounded-lg px-3.5 py-1.5 text-sm font-medium capitalize transition ${
+                  view === v
+                    ? "bg-[var(--primary)] text-[var(--text-on-primary)]"
+                    : "text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)]"
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => {
+              setFormError(null);
+              setRaiseOpen(true);
+            }}
+            className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-[var(--text-on-primary)] transition hover:bg-[var(--primary-hover)]"
+          >
+            <PlusIcon className="h-4 w-4" />
+            Raise ticket
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-6 flex flex-wrap gap-1 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-card)] p-1">
         <button
-          onClick={() => {
-            setFormError(null);
-            setRaiseOpen(true);
-          }}
-          className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-[var(--text-on-primary)] transition hover:bg-[var(--primary-hover)]"
+          onClick={() => setStatusFilter("all")}
+          className={`rounded-lg px-3.5 py-2 text-sm font-medium transition ${
+            statusFilter === "all"
+              ? "bg-[var(--primary)] text-[var(--text-on-primary)]"
+              : "text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)]"
+          }`}
         >
-          <PlusIcon className="h-4 w-4" />
-          Raise ticket
+          All
         </button>
+        {COLUMNS.map((col) => (
+          <button
+            key={col.key}
+            onClick={() => setStatusFilter(col.key)}
+            className={`rounded-lg px-3.5 py-2 text-sm font-medium transition ${
+              statusFilter === col.key
+                ? "bg-[var(--primary)] text-[var(--text-on-primary)]"
+                : "text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)]"
+            }`}
+          >
+            {col.label}
+          </button>
+        ))}
       </div>
 
       <div className="mt-4 flex items-center gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-card)] px-4 py-3">
@@ -218,17 +286,22 @@ export default function MaintenancePage() {
           {error}
         </div>
       )}
+      {notice && (
+        <div className="mt-4 rounded-2xl border border-[var(--success-bg)] bg-[var(--success-bg)] px-4 py-3 text-sm text-[var(--success-fg)]">
+          {notice}
+        </div>
+      )}
 
       {loading ? (
         <div className="mt-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-card)] py-14 text-center text-sm text-[var(--text-tertiary)]">
           Loading…
         </div>
-      ) : (
+      ) : view === "board" ? (
         <div className="mt-6 flex gap-4 overflow-x-auto pb-2">
-          {COLUMNS.map((col) => {
+          {COLUMNS.filter((col) => statusFilter === "all" || col.key === statusFilter).map((col) => {
             const colTickets = byColumn.get(col.key) ?? [];
             return (
-              <div key={col.key} className="w-72 shrink-0">
+              <div key={col.key} className={statusFilter === "all" ? "w-80 shrink-0" : "w-full"}>
                 <div className="flex items-center justify-between px-1 pb-3">
                   <span className="text-sm font-semibold text-[var(--text-primary)]">
                     {col.label}
@@ -238,7 +311,7 @@ export default function MaintenancePage() {
                   </Badge>
                 </div>
 
-                <div className="space-y-3 rounded-2xl bg-[var(--surface-sunken)] p-3 min-h-[120px]">
+                <div className="max-h-[560px] min-h-[120px] space-y-3 overflow-y-auto rounded-2xl bg-[var(--surface-sunken)] p-3">
                   {colTickets.length === 0 && (
                     <div className="flex flex-col items-center gap-2 py-8 text-center">
                       <ClipboardListIcon className="h-5 w-5 text-[var(--text-tertiary)]" />
@@ -249,43 +322,58 @@ export default function MaintenancePage() {
                   {colTickets.map((ticket) => (
                     <div
                       key={ticket.ticketId}
-                      className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-card)] p-3.5 shadow-sm"
+                      className="flex items-start gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-card)] p-3.5 shadow-sm"
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="num rounded-md bg-[var(--surface-sunken)] px-2 py-0.5 text-xs font-semibold text-[var(--text-primary)]">
-                          {ticket.tag}
-                        </span>
-                        <Badge tone={PRIORITY_TONE[ticket.priority]}>{ticket.priority}</Badge>
-                      </div>
+                      <span
+                        className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${PRIORITY_ICON_CLASSES[ticket.priority]}`}
+                      >
+                        <WrenchIcon className="h-4 w-4" />
+                      </span>
 
-                      <p className="mt-2.5 text-sm text-[var(--text-primary)]">
-                        {ticket.issueDescription}
-                      </p>
-
-                      {ticket.technicianName && (
-                        <div className="mt-2 flex items-center gap-1.5 text-xs text-[var(--text-tertiary)]">
-                          <UsersIcon className="h-3.5 w-3.5" />
-                          {ticket.technicianName}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge tone={PRIORITY_TONE[ticket.priority]}>{ticket.priority}</Badge>
+                          <span className="num text-xs text-[var(--text-tertiary)]">{ticket.tag}</span>
+                          <span className="ml-auto shrink-0 text-xs text-[var(--text-tertiary)]">
+                            {timeAgo(ticket.updatedAt)}
+                          </span>
                         </div>
-                      )}
-                      {ticket.status === "resolved" && ticket.resolutionNotes && (
-                        <div className="mt-2 rounded-lg bg-[var(--success-bg)] px-2.5 py-1.5 text-xs text-[var(--success-fg)]">
-                          {ticket.resolutionNotes}
-                        </div>
-                      )}
-                      {ticket.status === "rejected" && ticket.rejectionReason && (
-                        <div className="mt-2 rounded-lg bg-[var(--danger-bg)] px-2.5 py-1.5 text-xs text-[var(--danger-fg)]">
-                          {ticket.rejectionReason}
-                        </div>
-                      )}
 
-                      <div className="mt-3 flex items-center justify-between">
-                        <span className="text-xs text-[var(--text-tertiary)]">
-                          {ticket.raisedBy} · {timeAgo(ticket.updatedAt)}
-                        </span>
-                      </div>
+                        <p
+                          className="mt-1.5 line-clamp-2 text-sm text-[var(--text-primary)]"
+                          title={ticket.issueDescription}
+                        >
+                          {ticket.issueDescription}
+                        </p>
 
-                      {ticket.status === "pending" && canApprove && (
+                        {ticket.technicianName && (
+                          <div className="mt-2 flex items-center gap-1.5 text-xs text-[var(--text-tertiary)]">
+                            <UsersIcon className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate">{ticket.technicianName}</span>
+                          </div>
+                        )}
+                        {ticket.status === "resolved" && ticket.resolutionNotes && (
+                          <div
+                            className="mt-2 line-clamp-2 rounded-lg bg-[var(--success-bg)] px-2.5 py-1.5 text-xs text-[var(--success-fg)]"
+                            title={ticket.resolutionNotes}
+                          >
+                            {ticket.resolutionNotes}
+                          </div>
+                        )}
+                        {ticket.status === "rejected" && ticket.rejectionReason && (
+                          <div
+                            className="mt-2 line-clamp-2 rounded-lg bg-[var(--danger-bg)] px-2.5 py-1.5 text-xs text-[var(--danger-fg)]"
+                            title={ticket.rejectionReason}
+                          >
+                            {ticket.rejectionReason}
+                          </div>
+                        )}
+
+                        <div className="mt-2 truncate text-xs text-[var(--text-tertiary)]" title={ticket.raisedBy}>
+                          Raised by {ticket.raisedBy}
+                        </div>
+
+                        {ticket.status === "pending" && canApprove && (
                         <div className="mt-3 flex gap-2">
                           <button
                             onClick={() => approve(ticket)}
@@ -337,12 +425,119 @@ export default function MaintenancePage() {
                           Resolve
                         </button>
                       )}
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
             );
           })}
+        </div>
+      ) : (
+        <div className="mt-6 max-h-[600px] overflow-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-card)]">
+          <table className="w-full text-left text-sm">
+            <thead className="sticky top-0 z-10 bg-[var(--surface-sunken)] text-xs uppercase tracking-wide text-[var(--text-tertiary)]">
+              <tr>
+                <th className="px-5 py-3 font-semibold">Asset</th>
+                <th className="px-5 py-3 font-semibold">Issue</th>
+                <th className="px-5 py-3 font-semibold">Priority</th>
+                <th className="px-5 py-3 font-semibold">Status</th>
+                <th className="px-5 py-3 font-semibold">Technician</th>
+                <th className="px-5 py-3 font-semibold">Updated</th>
+                <th className="px-5 py-3 font-semibold text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border-subtle)]">
+              {tableTickets.map((ticket) => {
+                const col = columnByKey.get(ticket.status);
+                return (
+                  <tr key={ticket.ticketId} className="hover:bg-[var(--surface-sunken)]">
+                    <td className="num px-5 py-3.5 font-medium text-[var(--text-primary)]">{ticket.tag}</td>
+                    <td className="max-w-[240px] px-5 py-3.5 text-[var(--text-secondary)]">
+                      <span className="line-clamp-2" title={ticket.issueDescription}>
+                        {ticket.issueDescription}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <Badge tone={PRIORITY_TONE[ticket.priority]}>{ticket.priority}</Badge>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      {col && <Badge tone={col.tone}>{col.label}</Badge>}
+                    </td>
+                    <td className="px-5 py-3.5 text-[var(--text-secondary)]">
+                      {ticket.technicianName ?? "—"}
+                    </td>
+                    <td className="px-5 py-3.5 text-xs text-[var(--text-tertiary)]">
+                      {timeAgo(ticket.updatedAt)}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <div className="flex justify-end gap-2">
+                        {ticket.status === "pending" && canApprove && (
+                          <>
+                            <button
+                              onClick={() => approve(ticket)}
+                              className="rounded-lg bg-[var(--primary)] px-2.5 py-1.5 text-xs font-semibold text-[var(--text-on-primary)] hover:bg-[var(--primary-hover)]"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => {
+                                setFormError(null);
+                                setActionModal({ type: "reject", ticket });
+                              }}
+                              className="rounded-lg border border-[var(--border-default)] px-2.5 py-1.5 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-card)]"
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+                        {ticket.status === "approved" && (
+                          <button
+                            onClick={() => {
+                              setFormError(null);
+                              setActionModal({ type: "assign", ticket });
+                            }}
+                            className="rounded-lg bg-[var(--primary)] px-2.5 py-1.5 text-xs font-semibold text-[var(--text-on-primary)] hover:bg-[var(--primary-hover)]"
+                          >
+                            Assign technician
+                          </button>
+                        )}
+                        {ticket.status === "technician_assigned" && (
+                          <button
+                            onClick={() => start(ticket)}
+                            className="rounded-lg bg-[var(--primary)] px-2.5 py-1.5 text-xs font-semibold text-[var(--text-on-primary)] hover:bg-[var(--primary-hover)]"
+                          >
+                            Start work
+                          </button>
+                        )}
+                        {ticket.status === "in_progress" && (
+                          <button
+                            onClick={() => {
+                              setFormError(null);
+                              setActionModal({ type: "resolve", ticket });
+                            }}
+                            className="rounded-lg bg-[var(--primary)] px-2.5 py-1.5 text-xs font-semibold text-[var(--text-on-primary)] hover:bg-[var(--primary-hover)]"
+                          >
+                            Resolve
+                          </button>
+                        )}
+                        {(ticket.status === "resolved" || ticket.status === "rejected") && (
+                          <span className="text-xs text-[var(--text-tertiary)]">—</span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {tableTickets.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-5 py-10 text-center text-[var(--text-tertiary)]">
+                    No tickets found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       )}
 

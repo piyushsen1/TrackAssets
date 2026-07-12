@@ -121,6 +121,43 @@ export async function createCategory(req: AuthedRequest, res: Response) {
   });
 }
 
+export async function updateCategory(req: AuthedRequest, res: Response) {
+  const { categoryId } = req.params;
+  const { name, customFields } = req.body ?? {};
+
+  const existing = await prisma.category.findUnique({ where: { id: categoryId } });
+  if (!existing) {
+    return res.status(404).json({ error: "category_not_found" });
+  }
+
+  const category = await prisma.category.update({
+    where: { id: categoryId },
+    data: {
+      ...(name !== undefined && { name }),
+      ...(customFields !== undefined && { customFields }),
+    },
+  });
+
+  res.json({ categoryId: category.id, name: category.name, customFields: category.customFields });
+}
+
+export async function deleteCategory(req: AuthedRequest, res: Response) {
+  const { categoryId } = req.params;
+
+  const existing = await prisma.category.findUnique({ where: { id: categoryId } });
+  if (!existing) {
+    return res.status(404).json({ error: "category_not_found" });
+  }
+
+  const assetCount = await prisma.asset.count({ where: { categoryId } });
+  if (assetCount > 0) {
+    return res.status(409).json({ error: "category_has_active_references", assetCount });
+  }
+
+  await prisma.category.delete({ where: { id: categoryId } });
+  res.status(204).send();
+}
+
 function toEmployeeResponse(
   employee: Prisma.EmployeeGetPayload<{ include: { user: true; department: true } }>
 ) {
@@ -172,6 +209,29 @@ export async function createEmployee(req: AuthedRequest, res: Response) {
   });
 
   res.status(201).json(toEmployeeResponse(employee));
+}
+
+export async function updateEmployee(req: AuthedRequest, res: Response) {
+  const { id } = req.params;
+  const { name, title, deptId, status } = req.body ?? {};
+
+  const existing = await prisma.employee.findUnique({ where: { id } });
+  if (!existing) {
+    return res.status(404).json({ error: "employee_not_found" });
+  }
+
+  const employee = await prisma.employee.update({
+    where: { id },
+    data: {
+      ...(name !== undefined && { name }),
+      ...(title !== undefined && { title }),
+      ...(deptId !== undefined && { departmentId: deptId }),
+      ...(status !== undefined && { status }),
+    },
+    include: { user: true, department: true },
+  });
+
+  res.json(toEmployeeResponse(employee));
 }
 
 const PROMOTABLE_ROLES: UserRole[] = ["employee", "department_head", "asset_manager"];

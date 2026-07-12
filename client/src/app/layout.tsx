@@ -13,6 +13,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{var t=localStorage.getItem('theme');if(t==='dark'||t==='light'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}",
+          }}
+        />
+      </head>
       <body className="min-h-screen bg-[var(--surface-page)] text-[var(--text-primary)]">
         {children}
       </body>

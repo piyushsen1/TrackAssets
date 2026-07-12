@@ -1,4 +1,5 @@
 import { Response } from "express";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../config/db";
 import { AuthedRequest } from "../middleware/auth";
 
@@ -189,6 +190,46 @@ export async function createTransferRequest(req: AuthedRequest, res: Response) {
   });
 
   res.status(201).json({ requestId: request.id, status: request.status });
+}
+
+export async function listTransferRequests(req: AuthedRequest, res: Response) {
+  const { status, tag } = req.query as { status?: string; tag?: string };
+
+  const where: Prisma.TransferRequestWhereInput = {};
+  if (status) where.status = status as Prisma.TransferRequestWhereInput["status"];
+  if (tag) where.asset = { tag };
+
+  if (req.user?.role === "department_head") {
+    const approver = req.user.employeeId
+      ? await prisma.employee.findUnique({ where: { id: req.user.employeeId } })
+      : null;
+    where.fromEmployee = { departmentId: approver?.departmentId ?? "__none__" };
+  } else if (req.user?.role === "employee") {
+    where.OR = [{ fromEmployeeId: req.user.employeeId ?? "__none__" }, { toEmployeeId: req.user.employeeId ?? "__none__" }];
+  }
+  // admin / asset_manager see everything unscoped.
+
+  const requests = await prisma.transferRequest.findMany({
+    where,
+    include: { asset: true, fromEmployee: true, toEmployee: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  res.json(
+    requests.map((r) => ({
+      requestId: r.id,
+      tag: r.asset.tag,
+      fromEmployeeId: r.fromEmployeeId,
+      fromEmployeeName: r.fromEmployee.name,
+      toEmployeeId: r.toEmployeeId,
+      toEmployeeName: r.toEmployee.name,
+      reason: r.reason,
+      status: r.status,
+      rejectionReason: r.rejectionReason,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+    }))
+  );
 }
 
 export async function approveTransferRequest(req: AuthedRequest, res: Response) {

@@ -142,3 +142,27 @@ export const ClipboardListIcon = base(
     <path d="M9 11h6M9 14.5h6M9 17.5h3" />
   </>,
 );
+
+export const MenuIcon = base(<path d="M4 6h16M4 12h16M4 18h16" />);
+
+export const PencilIcon = base(
+  <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />,
+);
+
+export const TrashIcon = base(
+  <>
+    <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V6h12Z" />
+    <path d="M10 11v6M14 11v6" />
+  </>,
+);
+
+export const SunIcon = base(
+  <>
+    <circle cx="12" cy="12" r="4.5" />
+    <path d="M12 2.5v2.5M12 19v2.5M4.6 4.6l1.8 1.8M17.6 17.6l1.8 1.8M2.5 12H5M19 12h2.5M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8" />
+  </>,
+);
+
+export const MoonIcon = base(
+  <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" />,
+);

@@ -197,11 +197,21 @@ export async function resolveTicket(req: AuthedRequest, res: Response) {
       where: { id: ticketId },
       data: { status: "resolved", resolutionNotes: resolutionNotes ?? null },
     });
-    await tx.asset.update({ where: { id: ticket.assetId }, data: { status: "available" } });
+
+    // Maintenance and allocation are independent axes — if the holder never returned
+    // the asset while it was under maintenance, resolving the ticket must restore
+    // `allocated`, not blindly `available` (which would silently contradict the still-open
+    // Allocation row and corrupt Dashboard/Reports counts + the Asset Directory's status).
+    const openAllocation = await tx.allocation.findFirst({
+      where: { assetId: ticket.assetId, returnedAt: null },
+    });
+    const restoredStatus = openAllocation ? "allocated" : "available";
+    await tx.asset.update({ where: { id: ticket.assetId }, data: { status: restoredStatus } });
+
     await tx.notification.create({
       data: {
         type: "approval",
-        message: `Maintenance resolved for ticket ${ticket.id}, asset ${ticket.asset.tag} is available again`,
+        message: `Maintenance resolved for ticket ${ticket.id}, asset ${ticket.asset.tag} is ${restoredStatus} again`,
         relatedEntityTag: ticket.asset.tag,
       },
     });
