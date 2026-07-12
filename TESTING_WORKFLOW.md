@@ -51,9 +51,20 @@ Seeded test accounts (password `Password123` for all except admin):
 
 ## 3. Asset Registration & Directory
 
-**Backend:** ❌ not started · **Frontend:** ❌ not started
+**Backend:** ✅ done · **Frontend:** ❌ pending
 
-*(Steps to be added once this module is implemented.)*
+Seeded assets: `AF-0001` (Dell laptop, Engineering), `AF-0002` (HP laptop, Sales), `AF-0003` (office desk, Engineering), `AF-0004` (company vehicle, unassigned department, `isBookable: true`).
+
+**Steps (once frontend lands):**
+1. Log in as Asset Manager (`manager@assetflow.test`).
+2. Register a new asset with name/category/department/location/serial — confirm it gets an auto-generated tag (`AF-0005`, sequential) and a real scannable QR code image, and starts as `available`.
+3. On the directory list, search by tag, by serial, and by partial name — confirm all three match.
+4. Filter by category, status, and department independently — confirm each narrows results correctly.
+5. Open an asset's detail view — confirm it shows category/department names (not raw IDs), current holder (null for now until Phase 4), and empty allocation/maintenance history (expected until Phases 4 & 6 exist).
+6. Edit an asset's location/condition/photo via the directory — confirm it saves.
+7. Attempt to change an asset's status directly through the edit form's underlying API call — confirm the backend rejects it (`400 field_not_directly_editable`); status must only ever change via Allocation/Maintenance/Audit actions in later modules.
+
+**Expected result:** registration auto-generates tag + QR code; search/filter all work independently and combined; status is never directly editable from this screen.
 
 ---
 

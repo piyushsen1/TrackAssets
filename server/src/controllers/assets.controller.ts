@@ -8,8 +8,9 @@ const TAG_PREFIX = "AF-";
 const TAG_PAD = 4;
 
 async function generateNextTag(): Promise<string> {
+  const startPos = TAG_PREFIX.length + 1;
   const [{ max }] = await prisma.$queryRaw<{ max: number | null }[]>`
-    SELECT MAX(CAST(SUBSTRING(tag FROM ${TAG_PREFIX.length + 1}) AS INTEGER)) AS max
+    SELECT MAX(CAST(SUBSTRING(tag FROM ${startPos}::int) AS INTEGER)) AS max
     FROM "Asset"
     WHERE tag LIKE ${TAG_PREFIX + "%"}
   `;
