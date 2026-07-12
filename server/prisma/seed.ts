@@ -199,6 +199,24 @@ async function main() {
     },
   ];
 
+  await prisma.resource.upsert({
+    where: { id: "seed-resource-room-b2" },
+    update: {},
+    create: { id: "seed-resource-room-b2", name: "Conference Room B2", type: "room" },
+  });
+
+  await prisma.resource.upsert({
+    where: { id: "seed-resource-room-a1" },
+    update: {},
+    create: { id: "seed-resource-room-a1", name: "Meeting Room A1", type: "room" },
+  });
+
+  await prisma.resource.upsert({
+    where: { id: "seed-resource-vehicle-innova" },
+    update: {},
+    create: { id: "seed-resource-vehicle-innova", name: "Toyota Innova (Company Vehicle)", type: "vehicle" },
+  });
+
   for (const assetData of sampleAssets) {
     await prisma.asset.upsert({
       where: { id: assetData.id },
@@ -216,6 +234,7 @@ async function main() {
   console.log({ departmentHead: "depthead@assetflow.test" });
   console.log({ employees: ["priya@assetflow.test", "raj@assetflow.test"] });
   console.log({ assets: sampleAssets.map((a) => a.tag) });
+  console.log({ resources: ["Conference Room B2", "Meeting Room A1", "Toyota Innova (Company Vehicle)"] });
 }
 
 main()
