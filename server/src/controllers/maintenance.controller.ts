@@ -1,7 +1,9 @@
 import { Response } from "express";
 import { AuthedRequest } from "../middleware/auth";
 import { prisma } from "../config/db";
-import type { TicketStatus } from "@prisma/client";
+import type { TicketPriority, TicketStatus } from "@prisma/client";
+
+const VALID_PRIORITIES: TicketPriority[] = ["low", "medium", "high"];
 
 export async function listTickets(req: AuthedRequest, res: Response) {
   const status = req.query.status as TicketStatus | undefined;
@@ -17,22 +19,27 @@ export async function listTickets(req: AuthedRequest, res: Response) {
       ticketId: ticket.id,
       tag: ticket.asset.tag,
       issueDescription: ticket.issueDescription,
+      priority: ticket.priority,
+      photoUrl: ticket.photoUrl,
       status: ticket.status,
       technicianName: ticket.technicianName,
       raisedBy: ticket.raisedBy,
       createdAt: ticket.createdAt,
       updatedAt: ticket.updatedAt,
-    })),
+    }))
   );
 }
 
 export async function raiseTicket(req: AuthedRequest, res: Response) {
-  const { tag, issueDescription, raisedBy } = req.body ?? {};
+  const { tag, issueDescription, raisedBy, priority, photoUrl } = req.body ?? {};
   if (!tag || !issueDescription || !raisedBy) {
     return res.status(400).json({
       error: "missing_fields",
       required: ["tag", "issueDescription", "raisedBy"],
     });
+  }
+  if (priority && !VALID_PRIORITIES.includes(priority)) {
+    return res.status(400).json({ error: "invalid_priority", allowed: VALID_PRIORITIES });
   }
 
   const asset = await prisma.asset.findUnique({ where: { tag } });
@@ -45,6 +52,8 @@ export async function raiseTicket(req: AuthedRequest, res: Response) {
       assetId: asset.id,
       issueDescription,
       raisedBy,
+      priority: priority ?? "medium",
+      photoUrl: photoUrl ?? null,
       status: "pending",
     },
   });
@@ -53,32 +62,32 @@ export async function raiseTicket(req: AuthedRequest, res: Response) {
     ticketId: ticket.id,
     tag: asset.tag,
     issueDescription: ticket.issueDescription,
+    priority: ticket.priority,
     status: ticket.status,
   });
 }
 
-export async function approveTicket(req: AuthedRequest, res: Response) {
-  const { ticketId } = req.params;
+async function requireTicketInStatus(ticketId: string, expected: TicketStatus) {
   const ticket = await prisma.maintenanceTicket.findUnique({
     where: { id: ticketId },
     include: { asset: true },
   });
-  if (!ticket) {
-    return res.status(404).json({ error: "ticket_not_found" });
-  }
-  if (ticket.status !== "pending") {
-    return res.status(400).json({ error: "invalid_ticket_status" });
-  }
+  if (!ticket) return { error: "ticket_not_found" as const };
+  if (ticket.status !== expected) return { error: "invalid_ticket_status" as const, ticket };
+  return { ticket };
+}
+
+export async function approveTicket(req: AuthedRequest, res: Response) {
+  const { ticketId } = req.params;
+  const result = await requireTicketInStatus(ticketId, "pending");
+  if (result.error === "ticket_not_found") return res.status(404).json({ error: result.error });
+  if (result.error === "invalid_ticket_status")
+    return res.status(400).json({ error: result.error });
+  const { ticket } = result;
 
   await prisma.$transaction(async (tx) => {
-    await tx.maintenanceTicket.update({
-      where: { id: ticketId },
-      data: { status: "approved" },
-    });
-    await tx.asset.update({
-      where: { id: ticket.assetId },
-      data: { status: "under_maintenance" },
-    });
+    await tx.maintenanceTicket.update({ where: { id: ticketId }, data: { status: "approved" } });
+    await tx.asset.update({ where: { id: ticket.assetId }, data: { status: "under_maintenance" } });
     await tx.notification.create({
       data: {
         type: "approval",
@@ -91,42 +100,84 @@ export async function approveTicket(req: AuthedRequest, res: Response) {
   res.json({ ticketId, status: "approved" });
 }
 
+export async function rejectTicket(req: AuthedRequest, res: Response) {
+  const { ticketId } = req.params;
+  const { reason } = req.body ?? {};
+  const result = await requireTicketInStatus(ticketId, "pending");
+  if (result.error === "ticket_not_found") return res.status(404).json({ error: result.error });
+  if (result.error === "invalid_ticket_status")
+    return res.status(400).json({ error: result.error });
+  const { ticket } = result;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.maintenanceTicket.update({
+      where: { id: ticketId },
+      data: { status: "rejected", rejectionReason: reason ?? null },
+    });
+    await tx.notification.create({
+      data: {
+        type: "approval",
+        message: `Maintenance ticket ${ticket.id} rejected for asset ${ticket.asset.tag}`,
+        relatedEntityTag: ticket.asset.tag,
+      },
+    });
+  });
+
+  res.json({ ticketId, status: "rejected", rejectionReason: reason ?? null });
+}
+
 export async function assignTechnician(req: AuthedRequest, res: Response) {
   const { ticketId } = req.params;
   const { technicianName } = req.body ?? {};
   if (!technicianName) {
-    return res
-      .status(400)
-      .json({ error: "missing_fields", required: ["technicianName"] });
+    return res.status(400).json({ error: "missing_fields", required: ["technicianName"] });
   }
 
-  const ticket = await prisma.maintenanceTicket.update({
-    where: { id: ticketId },
-    data: { technicianName, status: "technician_assigned" },
+  const result = await requireTicketInStatus(ticketId, "approved");
+  if (result.error === "ticket_not_found") return res.status(404).json({ error: result.error });
+  if (result.error === "invalid_ticket_status")
+    return res.status(400).json({ error: result.error });
+  const { ticket } = result;
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const result = await tx.maintenanceTicket.update({
+      where: { id: ticketId },
+      data: { technicianName, status: "technician_assigned" },
+    });
+    await tx.notification.create({
+      data: {
+        type: "approval",
+        message: `Technician ${technicianName} assigned to ticket ${ticket.id} (asset ${ticket.asset.tag})`,
+        relatedEntityTag: ticket.asset.tag,
+      },
+    });
+    return result;
   });
 
-  res.json({
-    ticketId: ticket.id,
-    status: ticket.status,
-    technicianName: ticket.technicianName,
-  });
+  res.json({ ticketId: updated.id, status: updated.status, technicianName: updated.technicianName });
 }
 
 export async function startTicket(req: AuthedRequest, res: Response) {
   const { ticketId } = req.params;
-  const ticket = await prisma.maintenanceTicket.findUnique({
-    where: { id: ticketId },
-  });
-  if (!ticket) {
-    return res.status(404).json({ error: "ticket_not_found" });
-  }
-  if (ticket.status === "resolved") {
-    return res.status(400).json({ error: "invalid_ticket_status" });
-  }
+  const result = await requireTicketInStatus(ticketId, "technician_assigned");
+  if (result.error === "ticket_not_found") return res.status(404).json({ error: result.error });
+  if (result.error === "invalid_ticket_status")
+    return res.status(400).json({ error: result.error });
+  const { ticket } = result;
 
-  const updated = await prisma.maintenanceTicket.update({
-    where: { id: ticketId },
-    data: { status: "in_progress" },
+  const updated = await prisma.$transaction(async (tx) => {
+    const result = await tx.maintenanceTicket.update({
+      where: { id: ticketId },
+      data: { status: "in_progress" },
+    });
+    await tx.notification.create({
+      data: {
+        type: "approval",
+        message: `Maintenance started on ticket ${ticket.id} (asset ${ticket.asset.tag})`,
+        relatedEntityTag: ticket.asset.tag,
+      },
+    });
+    return result;
   });
 
   res.json({ ticketId: updated.id, status: updated.status });
@@ -135,32 +186,27 @@ export async function startTicket(req: AuthedRequest, res: Response) {
 export async function resolveTicket(req: AuthedRequest, res: Response) {
   const { ticketId } = req.params;
   const { resolutionNotes } = req.body ?? {};
-  const ticket = await prisma.maintenanceTicket.findUnique({
-    where: { id: ticketId },
-    include: { asset: true },
-  });
-  if (!ticket) {
-    return res.status(404).json({ error: "ticket_not_found" });
-  }
+  const result = await requireTicketInStatus(ticketId, "in_progress");
+  if (result.error === "ticket_not_found") return res.status(404).json({ error: result.error });
+  if (result.error === "invalid_ticket_status")
+    return res.status(400).json({ error: result.error });
+  const { ticket } = result;
 
   const updated = await prisma.$transaction(async (tx) => {
     const updatedTicket = await tx.maintenanceTicket.update({
       where: { id: ticketId },
-      data: {
-        status: "resolved",
-        resolutionNotes: resolutionNotes ?? ticket.resolutionNotes,
-      },
+      data: { status: "resolved", resolutionNotes: resolutionNotes ?? null },
     });
-    await tx.asset.update({
-      where: { id: ticket.assetId },
-      data: { status: "available" },
+    await tx.asset.update({ where: { id: ticket.assetId }, data: { status: "available" } });
+    await tx.notification.create({
+      data: {
+        type: "approval",
+        message: `Maintenance resolved for ticket ${ticket.id}, asset ${ticket.asset.tag} is available again`,
+        relatedEntityTag: ticket.asset.tag,
+      },
     });
     return updatedTicket;
   });
 
-  res.json({
-    ticketId: updated.id,
-    status: updated.status,
-    resolutionNotes: updated.resolutionNotes,
-  });
+  res.json({ ticketId: updated.id, status: updated.status, resolutionNotes: updated.resolutionNotes });
 }

@@ -12,6 +12,11 @@ router.patch(
   canApproveMaintenance,
   maintenanceController.approveTicket
 );
+router.patch(
+  "/tickets/:ticketId/reject",
+  canApproveMaintenance,
+  maintenanceController.rejectTicket
+);
 router.patch("/tickets/:ticketId/assign-technician", maintenanceController.assignTechnician);
 router.patch("/tickets/:ticketId/start", maintenanceController.startTicket);
 router.patch("/tickets/:ticketId/resolve", maintenanceController.resolveTicket);

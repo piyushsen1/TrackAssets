@@ -22,6 +22,14 @@ export async function signup(req: Request, res: Response) {
     data: { email, passwordHash, name },
   });
 
+  // An admin may have already added this person to the Employee directory
+  // (Organization Setup) before they ever signed up — link the two records
+  // by email now so their role can be assigned.
+  const unlinkedEmployee = await prisma.employee.findUnique({ where: { email } });
+  if (unlinkedEmployee && !unlinkedEmployee.userId) {
+    await prisma.employee.update({ where: { id: unlinkedEmployee.id }, data: { userId: user.id } });
+  }
+
   res.status(201).json({ userId: user.id, email: user.email, role: user.role });
 }
 

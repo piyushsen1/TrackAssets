@@ -20,8 +20,9 @@ export interface Department {
 }
 
 export interface Category {
-  id: string;
+  categoryId: string;
   name: string;
+  customFields?: Record<string, unknown> | null;
 }
 
 export interface Employee {

@@ -183,7 +183,7 @@ export default function AssetsPage() {
               >
                 <option value="">Select category</option>
                 {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
+                  <option key={category.categoryId} value={category.categoryId}>
                     {category.name}
                   </option>
                 ))}
@@ -352,7 +352,7 @@ export default function AssetsPage() {
               >
                 <option value="">All categories</option>
                 {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
+                  <option key={category.categoryId} value={category.categoryId}>
                     {category.name}
                   </option>
                 ))}

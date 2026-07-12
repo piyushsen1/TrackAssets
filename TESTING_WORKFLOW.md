@@ -43,6 +43,7 @@ Seeded test accounts (password `Password123` for all except admin):
 4. **Categories tab:** confirm seeded Electronics/Furniture/Vehicles show, with Electronics displaying its custom "warranty period" field. Create a new category.
 5. **Employee tab:** confirm the 4 seeded employees show with correct department/role/status. Create a new employee for an email that has already signed up (Screen 1) — confirm it auto-links their account (`hasAccount: true`) rather than creating a duplicate. Create one for an email that hasn't signed up — confirm it's created as directory-only (`hasAccount: false`).
 6. Promote an employee to Department Head or Asset Manager from this screen. Confirm attempting to promote a directory-only (no-account) employee is blocked with a clear message instead of silently failing.
+7. For a directory-only employee (e.g. `newhire@assetflow.test`), sign up via `/signup` using that exact email — confirm the Employee tab now shows them as having an account (badge clears) and a role can be assigned. This is the only way a "NO ACCOUNT" employee ever becomes promotable.
 7. Log in as a non-admin (e.g. `raj@assetflow.test`) and confirm none of the Organization Setup actions are reachable/authorized (403 on direct API calls).
 
 **Expected result:** all master data (departments/categories/employees) is admin-only to write, readable by everyone, and role promotion is the only place a role changes.
@@ -106,17 +107,33 @@ Seeded resources: `Conference Room B2`, `Meeting Room A1`, `Toyota Innova (Compa
 
 ## 6. Maintenance Management
 
-**Backend:** ❌ not started · **Frontend:** ❌ not started
+**Backend:** ✅ done · **Frontend:** ❌ pending
 
-*(Steps to be added once this module is implemented.)*
+**Steps (once frontend lands):**
+1. Raise a ticket on an available asset with an issue description, priority (`low`/`medium`/`high`), and optional photo — confirm it lands in `pending` and the asset's status is unchanged (no side effect yet, per spec).
+2. As Asset Manager/Admin, approve it — confirm the ticket moves to `approved` and the asset flips to `under_maintenance`.
+3. Try skipping straight to "assign technician" or "resolve" from the wrong ticket state (e.g. resolve a `pending` ticket) — confirm each transition is rejected unless the ticket is in the exact prior state the Kanban expects (`pending → approved/rejected → technician_assigned → in_progress → resolved`).
+4. Assign a technician (requires `approved`) → start work (requires `technician_assigned`) → resolve with notes (requires `in_progress`) — confirm the asset reverts to `available` only on resolve.
+5. Raise a second ticket and reject it instead of approving — confirm the rejection reason is saved and the asset status is untouched (it was never `pending`'s side effect in the first place).
+6. Check Notifications after each transition — confirm every step (approve/reject/assign/start/resolve) produced an entry.
+
+**Expected result:** the five-column Kanban is a real state machine — each transition requires the ticket to be in the exact expected prior state, not just "any non-terminal state"; asset status changes only on approve (→ under maintenance) and resolve (→ available).
 
 ---
 
 ## 7. Asset Audit
 
-**Backend:** ❌ not started · **Frontend:** ❌ not started
+**Backend:** ✅ done · **Frontend:** ❌ pending
 
-*(Steps to be added once this module is implemented.)*
+**Steps (once frontend lands):**
+1. As Admin, start an audit cycle for Engineering (`seed-dept-engineering`) with a date range and one or more auditors (use real employee IDs, e.g. `depthead@assetflow.test`'s employee id) — confirm the response includes a line item for every asset currently in that department with its expected location.
+2. As an employee who is **not** one of the assigned auditors and not admin, try to mark a line item — confirm 403.
+3. As an assigned auditor (or admin), mark one asset `verified`, one `missing`, one `damaged` (with notes) — confirm invalid verification values (e.g. `"broken"`) are rejected with 400.
+4. Check discrepancies — confirm only the `missing` and `damaged` items show up, not the `verified` one and not any still-unverified ones.
+5. Close the audit cycle — confirm: the `missing` asset's status flips to `lost`; the `damaged` asset gets a new `pending` maintenance ticket (high priority) but its status does **not** change yet (it only becomes `under_maintenance` once that ticket is separately approved through the Maintenance screen); a notification was written for each discrepancy.
+6. Try to mark another line item or close the cycle again after it's closed — confirm both are rejected (audit is frozen).
+
+**Expected result:** only assigned auditors (or admin) can record verification results; discrepancies are exactly missing+damaged; closing locks the cycle, sets missing assets to `lost`, and creates (but does not auto-approve) maintenance tickets for damaged ones.
 
 ---
 

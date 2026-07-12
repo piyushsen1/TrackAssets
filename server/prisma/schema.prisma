@@ -38,9 +38,16 @@ enum BookingStatus {
 enum TicketStatus {
   pending
   approved
+  rejected
   technician_assigned
   in_progress
   resolved
+}
+
+enum TicketPriority {
+  low
+  medium
+  high
 }
 
 enum VerificationResult {
@@ -194,16 +201,19 @@ model Booking {
 }
 
 model MaintenanceTicket {
-  id               String       @id @default(uuid())
+  id               String         @id @default(uuid())
   assetId          String
-  asset            Asset        @relation(fields: [assetId], references: [id])
+  asset            Asset          @relation(fields: [assetId], references: [id])
   issueDescription String
+  priority         TicketPriority @default(medium)
+  photoUrl         String?
   raisedBy         String
-  status           TicketStatus @default(pending)
+  status           TicketStatus   @default(pending)
   technicianName   String?
   resolutionNotes  String?
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  rejectionReason  String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 }
 
 model AuditCycle {
