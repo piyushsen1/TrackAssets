@@ -23,7 +23,6 @@ export default function LoginPage() {
         email,
         password,
       });
-
       setToken(token);
       router.push("/dashboard");
     } catch (err) {
