@@ -1,3 +1,72 @@
+<<<<<<< HEAD
+=======
+:root {
+  --primary: #2c5ead;
+  --primary-hover: #1591dc;
+  --primary-soft: #c4e2f5;
+
+  --surface-page: #f8fbff;
+  --surface-card: #ffffff;
+  --surface-sunken: #eef4ff;
+  --surface-hover: #e5f0ff;
+
+  --text-primary: #102a43;
+  --text-secondary: #334e68;
+  --text-tertiary: #627d98;
+  --text-on-primary: #ffffff;
+  --text-link: #1591dc;
+
+  --border-subtle: #d9e2ec;
+  --border-default: #cad6e2;
+  --border-focus: #2c5ead;
+
+  --success-fg: #047857;
+  --success-bg: #d1fae5;
+  --warning-fg: #92400e;
+  --warning-bg: #fef3c7;
+  --danger-fg: #b91c1c;
+  --danger-bg: #fee2e2;
+  --info-fg: #0e7490;
+  --info-bg: #dbeafe;
+  --teal-fg: #0f766e;
+  --teal-bg: #ccfbf1;
+}
+
+[data-theme="dark"] {
+  --surface-page: #0b1220;
+  --surface-card: #111827;
+  --surface-sunken: #1f2937;
+  --surface-hover: #1e293b;
+
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #cbd5e1;
+  --text-link: #93c5fd;
+
+  --border-subtle: #334155;
+  --border-default: #1f2937;
+  --border-focus: #93c5fd;
+}
+
+html {
+  min-height: 100%;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  background: var(--surface-page);
+  color: var(--text-primary);
+}
+
+.num {
+  font-family:
+    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+}
+
+>>>>>>> cdd4f7f (add sign up and login page)
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
