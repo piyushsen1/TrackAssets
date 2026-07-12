@@ -1,6 +1,6 @@
 import { Router } from "express";
 import * as orgController from "../controllers/org.controller";
-import { requireAdmin } from "../middleware/requireAdmin";
+import { requireAdmin } from "../middleware/requireRole";
 
 const router = Router();
 

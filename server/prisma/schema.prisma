@@ -9,14 +9,19 @@ datasource db {
 
 enum Role {
   employee
+  department_head
+  asset_manager
   admin
 }
 
 enum AssetStatus {
   available
   allocated
+  reserved
   under_maintenance
+  lost
   retired
+  disposed
 }
 
 enum TransferStatus {
@@ -69,18 +74,19 @@ model User {
 }
 
 model Department {
-  id        String       @id @default(uuid())
-  name      String
-  head      String?
-  parentId  String?
-  parent    Department?  @relation("DepartmentToParent", fields: [parentId], references: [id])
-  children  Department[] @relation("DepartmentToParent")
-  status    String       @default("active")
-  employees Employee[]
-  assets    Asset[]
-  audits    AuditCycle[]
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  id             String       @id @default(uuid())
+  name           String
+  headEmployeeId String?
+  head           Employee?    @relation("DepartmentHead", fields: [headEmployeeId], references: [id])
+  parentId       String?
+  parent         Department?  @relation("DepartmentToParent", fields: [parentId], references: [id])
+  children       Department[] @relation("DepartmentToParent")
+  status         String       @default("active")
+  employees      Employee[]   @relation("DepartmentEmployees")
+  assets         Asset[]
+  audits         AuditCycle[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 }
 
 model Category {
@@ -99,7 +105,8 @@ model Employee {
   email         String            @unique
   title         String?
   departmentId  String?
-  department    Department?       @relation(fields: [departmentId], references: [id])
+  department    Department?       @relation("DepartmentEmployees", fields: [departmentId], references: [id])
+  headOf        Department[]      @relation("DepartmentHead")
   allocations   Allocation[]
   transfersFrom TransferRequest[] @relation("TransferFrom")
   transfersTo   TransferRequest[] @relation("TransferTo")

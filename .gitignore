@@ -21,3 +21,6 @@ npm-debug.log*
 coverage/
 *.tsbuildinfo
 .vscode/
+.claude
+CLAUDE.md
+Mockup design Asset.txt

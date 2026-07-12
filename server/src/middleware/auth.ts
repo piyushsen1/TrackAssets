@@ -2,9 +2,12 @@ import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env";
 
+export type UserRole = "employee" | "department_head" | "asset_manager" | "admin";
+
 export interface AuthUser {
   userId: string;
-  role: "employee" | "admin";
+  employeeId?: string;
+  role: UserRole;
 }
 
 export interface AuthedRequest extends Request {
