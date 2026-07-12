@@ -87,9 +87,20 @@ Seeded assets: `AF-0001` (Dell laptop, Engineering), `AF-0002` (HP laptop, Sales
 
 ## 5. Resource Booking
 
-**Backend:** ❌ not started · **Frontend:** ❌ not started
+**Backend:** ✅ done · **Frontend:** ❌ pending
 
-*(Steps to be added once this module is implemented.)*
+Seeded resources: `Conference Room B2`, `Meeting Room A1`, `Toyota Innova (Company Vehicle)`.
+
+**Steps (once frontend lands):**
+1. Log in as Admin or Asset Manager, create a new resource — confirm a plain Employee gets 403 trying the same.
+2. Book Room B2 for 9:00–10:00.
+3. Attempt to book Room B2 for 9:30–10:30 — confirm it's rejected as a conflict (this is the spec's literal example).
+4. Book Room B2 for 10:00–11:00 (starts right when the first ends) — confirm this succeeds (also the spec's literal example, non-overlap).
+5. Check `displayStatus` on a booking: a slot in the future shows `upcoming`, a slot spanning "now" shows `ongoing`, a past slot shows `completed`, a cancelled one shows `cancelled` regardless of time.
+6. As a different employee (not the requester, not admin), try to cancel or reschedule someone else's booking — confirm 403. As the requester (or admin), cancel/reschedule it — confirm it works, and rescheduling re-runs the overlap check.
+7. Check Notifications after booking/reschedule/cancel — confirm each produced an entry.
+
+**Expected result:** overlap detection blocks exactly the overlapping case and allows the back-to-back case; only the requester or an admin can cancel/reschedule; resource creation is admin/asset-manager only.
 
 ---
 
