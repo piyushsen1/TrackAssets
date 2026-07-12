@@ -1,6 +1,7 @@
 import { getToken } from "./auth";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
@@ -18,14 +19,25 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     throw new Error(body.error ?? `Request failed with status ${res.status}`);
   }
 
-  return res.json();
+  if (res.status === 204) {
+    return {} as T;
+  }
+
+  const text = await res.text();
+  return text ? (JSON.parse(text) as T) : ({} as T);
 }
 
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, data?: unknown) =>
-    request<T>(path, { method: "POST", body: data ? JSON.stringify(data) : undefined }),
+    request<T>(path, {
+      method: "POST",
+      body: data ? JSON.stringify(data) : undefined,
+    }),
   patch: <T>(path: string, data?: unknown) =>
-    request<T>(path, { method: "PATCH", body: data ? JSON.stringify(data) : undefined }),
+    request<T>(path, {
+      method: "PATCH",
+      body: data ? JSON.stringify(data) : undefined,
+    }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };
