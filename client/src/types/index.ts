@@ -32,15 +32,24 @@ export interface Employee {
   title?: string;
 }
 
-export type AssetStatus = "Available" | "Allocated" | "Maintenance" | "Retired";
+export type AssetStatus =
+  | "available"
+  | "allocated"
+  | "reserved"
+  | "under_maintenance"
+  | "lost"
+  | "retired"
+  | "disposed";
 
 export interface Asset {
   tag: string;
   name: string;
-  category: string;
+  category?: string | null;
+  departmentName?: string | null;
   status: AssetStatus;
-  location: string;
-  departmentId?: string;
+  location?: string | null;
+  departmentId?: string | null;
+  isBookable?: boolean;
 }
 
 export interface Allocation {

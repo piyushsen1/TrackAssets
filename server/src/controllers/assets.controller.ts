@@ -17,7 +17,9 @@ async function generateNextTag(): Promise<string> {
   return `${TAG_PREFIX}${String((max ?? 0) + 1).padStart(TAG_PAD, "0")}`;
 }
 
-type AssetWithRelations = Prisma.AssetGetPayload<{ include: { category: true; department: true } }>;
+type AssetWithRelations = Prisma.AssetGetPayload<{
+  include: { category: true; department: true };
+}>;
 
 function toListItem(asset: AssetWithRelations) {
   return {
@@ -57,20 +59,30 @@ function toDetailResponse(asset: AssetWithRelations) {
 }
 
 export async function listAssets(req: AuthedRequest, res: Response) {
-  const { search, category, status, department, location } = req.query as Record<string, string>;
-  const page = Math.max(1, parseInt((req.query.page as string) ?? "1", 10) || 1);
-  const pageSize = Math.min(100, Math.max(1, parseInt((req.query.pageSize as string) ?? "20", 10) || 20));
+  const { search, category, status, department, location, tag, serial, qr } =
+    req.query as Record<string, string>;
+  const page = Math.max(
+    1,
+    parseInt((req.query.page as string) ?? "1", 10) || 1,
+  );
+  const pageSize = Math.min(
+    100,
+    Math.max(1, parseInt((req.query.pageSize as string) ?? "20", 10) || 20),
+  );
+
+  const searchTerm = [search, tag, serial, qr].filter(Boolean).join(" ").trim();
 
   const where: Prisma.AssetWhereInput = {
     ...(category && { categoryId: category }),
     ...(status && { status: status as Prisma.EnumAssetStatusFilter["equals"] }),
     ...(department && { departmentId: department }),
     ...(location && { location: { contains: location, mode: "insensitive" } }),
-    ...(search && {
+    ...(searchTerm && {
       OR: [
-        { tag: { contains: search, mode: "insensitive" } },
-        { serial: { contains: search, mode: "insensitive" } },
-        { name: { contains: search, mode: "insensitive" } },
+        { tag: { contains: searchTerm, mode: "insensitive" } },
+        { serial: { contains: searchTerm, mode: "insensitive" } },
+        { name: { contains: searchTerm, mode: "insensitive" } },
+        { qrCodeUrl: { contains: searchTerm, mode: "insensitive" } },
       ],
     }),
   };
@@ -111,17 +123,23 @@ export async function registerAsset(req: AuthedRequest, res: Response) {
   } = req.body ?? {};
 
   if (!name) {
-    return res.status(400).json({ error: "missing_fields", required: ["name"] });
+    return res
+      .status(400)
+      .json({ error: "missing_fields", required: ["name"] });
   }
 
   if (category) {
-    const categoryExists = await prisma.category.findUnique({ where: { id: category } });
+    const categoryExists = await prisma.category.findUnique({
+      where: { id: category },
+    });
     if (!categoryExists) {
       return res.status(400).json({ error: "invalid_category" });
     }
   }
   if (department) {
-    const departmentExists = await prisma.department.findUnique({ where: { id: department } });
+    const departmentExists = await prisma.department.findUnique({
+      where: { id: department },
+    });
     if (!departmentExists) {
       return res.status(400).json({ error: "invalid_department" });
     }
@@ -148,17 +166,22 @@ export async function registerAsset(req: AuthedRequest, res: Response) {
           photoUrl: photoUrl ?? null,
           documentUrls: documentUrls ?? [],
           isBookable: !!isBookable,
+          status: "available",
         },
         include: { category: true, department: true },
       });
     } catch (err) {
       attempt += 1;
-      const isTagCollision = err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002";
+      const isTagCollision =
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === "P2002";
       if (!isTagCollision || attempt >= 3) throw err;
     }
   }
 
-  res.status(201).json({ tag: asset.tag, qrCodeUrl: asset.qrCodeUrl, status: asset.status });
+  res
+    .status(201)
+    .json({ tag: asset.tag, qrCodeUrl: asset.qrCodeUrl, status: asset.status });
 }
 
 export async function getAsset(req: AuthedRequest, res: Response) {
@@ -172,26 +195,30 @@ export async function getAsset(req: AuthedRequest, res: Response) {
     return res.status(404).json({ error: "asset_not_found" });
   }
 
-  const [currentAllocation, allocationHistory, maintenanceHistory] = await Promise.all([
-    prisma.allocation.findFirst({
-      where: { assetId: asset.id, returnedAt: null },
-      include: { employee: true },
-    }),
-    prisma.allocation.findMany({
-      where: { assetId: asset.id },
-      include: { employee: true },
-      orderBy: { allocatedSince: "desc" },
-    }),
-    prisma.maintenanceTicket.findMany({
-      where: { assetId: asset.id },
-      orderBy: { createdAt: "desc" },
-    }),
-  ]);
+  const [currentAllocation, allocationHistory, maintenanceHistory] =
+    await Promise.all([
+      prisma.allocation.findFirst({
+        where: { assetId: asset.id, returnedAt: null },
+        include: { employee: true },
+      }),
+      prisma.allocation.findMany({
+        where: { assetId: asset.id },
+        include: { employee: true },
+        orderBy: { allocatedSince: "desc" },
+      }),
+      prisma.maintenanceTicket.findMany({
+        where: { assetId: asset.id },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
 
   res.json({
     ...toDetailResponse(asset),
     currentHolder: currentAllocation
-      ? { employeeId: currentAllocation.employeeId, name: currentAllocation.employee.name }
+      ? {
+          employeeId: currentAllocation.employeeId,
+          name: currentAllocation.employee.name,
+        }
       : null,
     allocationHistory: allocationHistory.map((a) => ({
       employeeId: a.employeeId,
@@ -215,12 +242,15 @@ export async function updateAsset(req: AuthedRequest, res: Response) {
   const { tag } = req.params;
   const body = req.body ?? {};
 
-  const attemptedImmutableField = IMMUTABLE_FIELDS.find((field) => field in body);
+  const attemptedImmutableField = IMMUTABLE_FIELDS.find(
+    (field) => field in body,
+  );
   if (attemptedImmutableField) {
     return res.status(400).json({
       error: "field_not_directly_editable",
       field: attemptedImmutableField,
-      message: "Asset status changes only through allocation, maintenance, or audit actions.",
+      message:
+        "Asset status changes only through allocation, maintenance, or audit actions.",
     });
   }
 
@@ -229,7 +259,19 @@ export async function updateAsset(req: AuthedRequest, res: Response) {
     return res.status(404).json({ error: "asset_not_found" });
   }
 
-  const { name, category, department, location, serial, condition, photoUrl, documentUrls, isBookable, acquisitionDate, acquisitionCost } = body;
+  const {
+    name,
+    category,
+    department,
+    location,
+    serial,
+    condition,
+    photoUrl,
+    documentUrls,
+    isBookable,
+    acquisitionDate,
+    acquisitionCost,
+  } = body;
 
   const asset = await prisma.asset.update({
     where: { tag },
@@ -243,7 +285,9 @@ export async function updateAsset(req: AuthedRequest, res: Response) {
       ...(photoUrl !== undefined && { photoUrl }),
       ...(documentUrls !== undefined && { documentUrls }),
       ...(isBookable !== undefined && { isBookable }),
-      ...(acquisitionDate !== undefined && { acquisitionDate: acquisitionDate ? new Date(acquisitionDate) : null }),
+      ...(acquisitionDate !== undefined && {
+        acquisitionDate: acquisitionDate ? new Date(acquisitionDate) : null,
+      }),
       ...(acquisitionCost !== undefined && { acquisitionCost }),
     },
     include: { category: true, department: true },
@@ -261,16 +305,31 @@ export async function getAssetHistory(req: AuthedRequest, res: Response) {
   }
 
   const [allocations, maintenanceTickets, auditLineItems] = await Promise.all([
-    prisma.allocation.findMany({ where: { assetId: asset.id }, include: { employee: true } }),
+    prisma.allocation.findMany({
+      where: { assetId: asset.id },
+      include: { employee: true },
+    }),
     prisma.maintenanceTicket.findMany({ where: { assetId: asset.id } }),
     prisma.auditLineItem.findMany({ where: { assetId: asset.id } }),
   ]);
 
   const events = [
     ...allocations.flatMap((a) => [
-      { type: "allocated" as const, date: a.allocatedSince, employeeId: a.employeeId, employeeName: a.employee.name },
+      {
+        type: "allocated" as const,
+        date: a.allocatedSince,
+        employeeId: a.employeeId,
+        employeeName: a.employee.name,
+      },
       ...(a.returnedAt
-        ? [{ type: "returned" as const, date: a.returnedAt, employeeId: a.employeeId, employeeName: a.employee.name }]
+        ? [
+            {
+              type: "returned" as const,
+              date: a.returnedAt,
+              employeeId: a.employeeId,
+              employeeName: a.employee.name,
+            },
+          ]
         : []),
     ]),
     ...maintenanceTickets.map((m) => ({
