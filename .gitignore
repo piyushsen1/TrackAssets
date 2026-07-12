@@ -21,3 +21,8 @@ npm-debug.log*
 coverage/
 *.tsbuildinfo
 .vscode/
+<<<<<<< HEAD
+=======
+copilot.md
+copilot-instructions.md
+>>>>>>> cdd4f7f (add sign up and login page)
