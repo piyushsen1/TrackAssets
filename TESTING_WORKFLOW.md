@@ -70,9 +70,18 @@ Seeded assets: `AF-0001` (Dell laptop, Engineering), `AF-0002` (HP laptop, Sales
 
 ## 4. Asset Allocation & Transfer
 
-**Backend:** ❌ not started · **Frontend:** ❌ not started
+**Backend:** ✅ done · **Frontend:** ❌ pending
 
-*(Steps to be added once this module is implemented.)*
+**Steps (once frontend lands):**
+1. Log in as Asset Manager or Admin. Allocate `AF-0002` (currently `available`) to Priya, optionally with an Expected Return Date — confirm the asset's status flips to `allocated`.
+2. Attempt to allocate `AF-0002` to Raj while Priya still holds it — confirm it's blocked with `currentHolder: Priya`, and the UI offers a Transfer Request instead of a silent failure (this is the double-allocation block, the spec's headline demo).
+3. Submit a Transfer Request (Priya → Raj) with a reason. Log in as a Department Head **outside** the asset's department and try to approve it — confirm it's rejected (403, department-scoped). Log in as Admin or the correct Department Head and approve it — confirm Raj is now the holder and Priya's allocation record shows a `returnedAt` timestamp (history is append-only, never overwritten).
+4. Submit another transfer request and reject it instead — confirm the rejection reason is saved and the current holder is unchanged.
+5. Return the asset via the return action, entering condition check-in notes — confirm the asset's status reverts to `available` and its `condition` field updates.
+6. Put an asset `under_maintenance` (via the Maintenance screen) and confirm the Allocation screen blocks allocating it (distinct error from the double-allocation block — this one means "not available at all", not "already held").
+7. Check Notifications after each of the above — confirm allocation, transfer request, approval, rejection, and return each produced an entry.
+
+**Expected result:** one active holder per asset at all times; direct re-allocation always blocked in favor of a transfer request; approvals respect department scoping for Department Heads; return flow captures condition notes and frees the asset.
 
 ---
 

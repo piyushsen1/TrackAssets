@@ -10,9 +10,11 @@ export default function DashboardGroupLayout({
   return (
     <AuthProvider>
       <AuthGuard>
-        <div className="flex">
+        <div className="flex min-h-screen bg-[var(--surface-page)]">
           <Sidebar />
-          <main className="flex-1 p-8">{children}</main>
+          <main className="flex-1 overflow-y-auto p-8">
+            <div className="mx-auto max-w-6xl">{children}</div>
+          </main>
         </div>
       </AuthGuard>
     </AuthProvider>

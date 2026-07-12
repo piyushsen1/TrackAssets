@@ -59,6 +59,7 @@ enum NotificationType {
   approval
   booking
   transfer
+  allocation
   audit
 }
 
@@ -144,28 +145,31 @@ model Asset {
 }
 
 model Allocation {
-  id             String    @id @default(uuid())
-  assetId        String
-  asset          Asset     @relation(fields: [assetId], references: [id])
-  employeeId     String
-  employee       Employee  @relation(fields: [employeeId], references: [id])
-  allocatedSince DateTime  @default(now())
-  returnedAt     DateTime?
-  createdAt      DateTime  @default(now())
+  id                 String    @id @default(uuid())
+  assetId            String
+  asset              Asset     @relation(fields: [assetId], references: [id])
+  employeeId         String
+  employee           Employee  @relation(fields: [employeeId], references: [id])
+  allocatedSince     DateTime  @default(now())
+  expectedReturnDate DateTime?
+  returnedAt         DateTime?
+  conditionOnReturn  String?
+  createdAt          DateTime  @default(now())
 }
 
 model TransferRequest {
-  id             String         @id @default(uuid())
-  assetId        String
-  asset          Asset          @relation(fields: [assetId], references: [id])
-  fromEmployeeId String
-  fromEmployee   Employee       @relation("TransferFrom", fields: [fromEmployeeId], references: [id])
-  toEmployeeId   String
-  toEmployee     Employee       @relation("TransferTo", fields: [toEmployeeId], references: [id])
-  reason         String
-  status         TransferStatus @default(pending_approval)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  id              String         @id @default(uuid())
+  assetId         String
+  asset           Asset          @relation(fields: [assetId], references: [id])
+  fromEmployeeId  String
+  fromEmployee    Employee       @relation("TransferFrom", fields: [fromEmployeeId], references: [id])
+  toEmployeeId    String
+  toEmployee      Employee       @relation("TransferTo", fields: [toEmployeeId], references: [id])
+  reason          String
+  rejectionReason String?
+  status          TransferStatus @default(pending_approval)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 }
 
 model Resource {
