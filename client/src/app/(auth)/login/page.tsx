@@ -1,9 +1,6 @@
 "use client";
 
-<<<<<<< HEAD
-=======
 import Link from "next/link";
->>>>>>> cdd4f7f (add sign up and login page)
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
@@ -14,30 +11,18 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-<<<<<<< HEAD
-=======
   const [isSubmitting, setIsSubmitting] = useState(false);
->>>>>>> cdd4f7f (add sign up and login page)
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-<<<<<<< HEAD
-=======
     setIsSubmitting(true);
 
->>>>>>> cdd4f7f (add sign up and login page)
     try {
       const { token } = await api.post<{ token: string }>("/auth/login", {
         email,
         password,
       });
-<<<<<<< HEAD
-      setToken(token);
-      router.push("/dashboard");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
-=======
 
       setToken(token);
       router.push("/dashboard");
@@ -47,55 +32,10 @@ export default function LoginPage() {
       );
     } finally {
       setIsSubmitting(false);
->>>>>>> cdd4f7f (add sign up and login page)
     }
   }
 
   return (
-<<<<<<< HEAD
-    <div className="flex min-h-screen items-center justify-center">
-      <form
-        onSubmit={handleSubmit}
-        className="w-full max-w-sm space-y-4 rounded-lg border border-gray-200 bg-white p-8 shadow-sm"
-      >
-        <h1 className="text-xl font-semibold text-gray-900">Sign in to AssetFlow</h1>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Email</label>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Password</label>
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-          />
-        </div>
-        <button
-          type="submit"
-          className="w-full rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
-        >
-          Sign in
-        </button>
-        <div className="flex justify-between text-sm text-gray-500">
-          <a href="/forgot-password" className="hover:underline">
-            Forgot password?
-          </a>
-          <a href="/signup" className="hover:underline">
-            Create account
-          </a>
-        </div>
-      </form>
-=======
     <div className="flex min-h-screen items-center justify-center bg-[var(--surface-page)] px-4 py-12 text-[var(--text-primary)]">
       <div className="w-full max-w-md rounded-[28px] border border-[var(--border-default)] bg-[var(--surface-card)] p-8 shadow-[0_24px_60px_rgba(21,145,220,0.15)]">
         <div className="space-y-4">
@@ -164,7 +104,6 @@ export default function LoginPage() {
           </div>
         </form>
       </div>
->>>>>>> cdd4f7f (add sign up and login page)
     </div>
   );
 }

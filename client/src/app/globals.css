@@ -1,5 +1,7 @@
-<<<<<<< HEAD
-=======
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   --primary: #2c5ead;
   --primary-hover: #1591dc;
@@ -65,8 +67,3 @@ body {
     "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
 }
-
->>>>>>> cdd4f7f (add sign up and login page)
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
